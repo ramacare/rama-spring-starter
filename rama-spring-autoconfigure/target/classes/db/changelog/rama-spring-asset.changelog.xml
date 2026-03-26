@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="rama-spring-asset-001" author="codex">
+        <createTable tableName="asset_file">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="file_name" type="varchar(255)"/>
+            <column name="file_type" type="varchar(255)"/>
+            <column name="md5hash" type="varchar(64)"/>
+            <column name="original_file_name" type="varchar(255)"/>
+            <column name="location" type="varchar(20)"/>
+            <column name="bucket_name" type="varchar(255)"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="asset_file" indexName="ix_asset_file_location_bucket_md5">
+            <column name="location"/>
+            <column name="bucket_name"/>
+            <column name="md5hash"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

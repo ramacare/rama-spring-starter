@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="rama-spring-master-001" author="codex">
+        <createTable tableName="master_group">
+            <column name="group_key" type="varchar(255)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="group_name" type="varchar(1000)"/>
+            <column name="description" type="varchar(2000)"/>
+            <column name="properties_template" type="clob"/>
+            <column name="default_properties" type="clob"/>
+            <column name="status_code" type="varchar(32)"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+
+        <createTable tableName="master_id">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="id_type" type="varchar(50)"/>
+            <column name="prefix" type="varchar(50)"/>
+            <column name="running_number" type="int"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="master_id" indexName="ix_master_id_type_prefix">
+            <column name="id_type"/>
+            <column name="prefix"/>
+        </createIndex>
+
+        <createTable tableName="master_item">
+            <column name="id" type="varchar(255)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="group_key" type="varchar(255)"/>
+            <column name="item_code" type="varchar(255)"/>
+            <column name="item_value" type="varchar(1000)"/>
+            <column name="item_value_alternative" type="varchar(1000)"/>
+            <column name="ordering" type="int"/>
+            <column name="keyword" type="varchar(1000)"/>
+            <column name="filter_text" type="varchar(255)"/>
+            <column name="properties" type="clob"/>
+            <column name="status_code" type="varchar(32)"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="master_item"
+                                 baseColumnNames="group_key"
+                                 referencedTableName="master_group"
+                                 referencedColumnNames="group_key"
+                                 constraintName="fk_master_item_group"/>
+        <createIndex tableName="master_item" indexName="ux_master_item_group_item" unique="true">
+            <column name="group_key"/>
+            <column name="item_code"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="rama-spring-system-001" author="codex">
+        <createTable tableName="client_config">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="computer_name" type="varchar(255)"/>
+            <column name="fingerprint" type="varchar(255)"/>
+            <column name="configuration" type="clob"/>
+            <column name="last_seen_datetime" type="timestamp"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="client_config" indexName="ux_client_config_computer_name" unique="true">
+            <column name="computer_name"/>
+        </createIndex>
+
+        <createTable tableName="system_log">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="log_level" type="varchar(32)"/>
+            <column name="log_key" type="varchar(255)"/>
+            <column name="message" type="varchar(1000)"/>
+            <column name="detail" type="clob"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+
+        <createTable tableName="system_parameter">
+            <column name="parameter_key" type="varchar(255)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="parameter_value" type="clob"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+
+        <createTable tableName="system_service_no">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="mrn" type="varchar(100)"/>
+            <column name="service_no" type="varchar(100)"/>
+            <column name="encounter_id" type="varchar(255)"/>
+            <column name="service_type" type="varchar(100)"/>
+            <column name="uuid" type="varchar(36)"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="system_service_no" indexName="ux_system_service_no_uuid" unique="true">
+            <column name="uuid"/>
+        </createIndex>
+
+        <createTable tableName="system_template">
+            <column name="id" type="varchar(255)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template" type="clob"/>
+            <column name="template_script" type="clob"/>
+            <column name="status_code" type="varchar(32)"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+
+        <createTable tableName="revision">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="revision_key" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="mrn" type="varchar(255)"/>
+            <column name="revision_entity" type="varchar(255)"/>
+            <column name="revision_datetime" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision_data" type="clob">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision_change" type="clob"/>
+            <column name="created_by" type="varchar(200)"/>
+            <column name="updated_by" type="varchar(200)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="revision" indexName="idx_revision_revision_key">
+            <column name="revision_key"/>
+        </createIndex>
+        <createIndex tableName="revision" indexName="idx_revision_entity_mrn_datetime">
+            <column name="revision_entity"/>
+            <column name="mrn"/>
+            <column name="revision_datetime"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

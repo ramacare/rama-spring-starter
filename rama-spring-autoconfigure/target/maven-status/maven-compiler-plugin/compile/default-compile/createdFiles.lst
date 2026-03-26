@@ -1,0 +1,15 @@
+org/rama/starter/autoconfigure/RamaStarterAutoConfiguration$1.class
+org/rama/starter/autoconfigure/RamaStarterProperties$StaticValues.class
+org/rama/starter/autoconfigure/RamaStarterAutoConfiguration.class
+org/rama/starter/autoconfigure/RamaStarterProperties$Graphql.class
+org/rama/starter/autoconfigure/RamaStarterProperties.class
+org/rama/starter/autoconfigure/RamaStarterAutoConfiguration$OffsetDateTimeReadConverter.class
+org/rama/starter/autoconfigure/RamaStarterProperties$Mongo.class
+org/rama/starter/autoconfigure/RamaStarterProperties$Revision.class
+org/rama/starter/autoconfigure/RamaStarterProperties$Document.class
+org/rama/starter/autoconfigure/RamaStarterAutoConfiguration$BigIntegerToDecimal128Converter.class
+org/rama/starter/autoconfigure/RamaStarterProperties$Meilisearch.class
+org/rama/starter/autoconfigure/RamaStarterAutoConfiguration$Decimal128ToBigIntegerConverter.class
+org/rama/starter/autoconfigure/RamaStarterProperties$Storage.class
+org/rama/starter/autoconfigure/RamaStarterLiquibaseProperties.class
+org/rama/starter/autoconfigure/RamaStarterAutoConfiguration$OffsetDateTimeWriteConverter.class
