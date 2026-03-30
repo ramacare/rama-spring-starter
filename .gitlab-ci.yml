@@ -2,6 +2,10 @@ stages:
   - build
   - test
 
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  MAVEN_CLI_OPTS: "-B -ntp"
+
 default:
   image:
     name: maven:3.9.11-eclipse-temurin-17
@@ -10,9 +14,6 @@ default:
     key: maven-repo
     paths:
       - .m2/repository
-  variables:
-    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
-    MAVEN_CLI_OPTS: "-B -ntp"
 
 maven_build:
   stage: build
