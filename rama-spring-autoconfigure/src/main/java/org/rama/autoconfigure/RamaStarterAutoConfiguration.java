@@ -54,7 +54,13 @@ import org.rama.service.document.BarcodeReaderService;
 import org.rama.service.document.BarcodeService;
 import org.rama.service.document.ImageService;
 import org.rama.service.document.PdfService;
-import org.rama.service.document.template.*;
+import org.rama.service.document.printTemplate.TemplatePreprocessor;
+import org.rama.service.document.replacement.ReplacementHooks;
+import org.rama.service.document.replacement.ReplacementObjectHook;
+import org.rama.service.document.replacement.ReplacementStringHook;
+import org.rama.service.document.template.DocxTemplatePreprocessor;
+import org.rama.service.document.template.DocxTemplateProcessor;
+import org.rama.service.document.template.ReplacementProcessor;
 import org.rama.service.document.template.docx.ReplacePlaceholder;
 import org.rama.service.document.template.docx.ReplaceSection;
 import org.rama.service.document.template.hooks.*;
@@ -464,8 +470,8 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    MeilisearchErrorHandler meilisearchErrorHandler() {
-        return new LoggingMeilisearchErrorHandler();
+    MeilisearchErrorHandler meilisearchErrorHandler(ObjectProvider<SystemLogService> systemLogServiceProvider) {
+        return new LoggingMeilisearchErrorHandler(systemLogServiceProvider);
     }
 
     @Bean

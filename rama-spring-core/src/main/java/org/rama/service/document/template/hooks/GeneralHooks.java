@@ -1,6 +1,6 @@
 package org.rama.service.document.template.hooks;
 
-import org.rama.service.document.template.ReplacementStringHook;
+import org.rama.service.document.replacement.ReplacementStringHook;
 
 import java.util.Map;
 

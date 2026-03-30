@@ -1,4 +1,4 @@
-package org.rama.service.document.template;
+package org.rama.service.document.replacement;
 
 import java.util.Comparator;
 import java.util.Map;

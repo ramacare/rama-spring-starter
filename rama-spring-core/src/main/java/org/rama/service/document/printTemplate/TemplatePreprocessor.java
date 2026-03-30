@@ -1,6 +1,7 @@
-package org.rama.service.document.template;
+package org.rama.service.document.printTemplate;
 
 import org.rama.entity.asset.AssetFile;
+import org.rama.service.document.template.DocxTemplatePreprocessor;
 
 import java.io.InputStream;
 

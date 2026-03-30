@@ -1,6 +1,6 @@
 package org.rama.service.document.template.hooks;
 
-import org.rama.service.document.template.ReplacementObjectHook;
+import org.rama.service.document.replacement.ReplacementObjectHook;
 import org.rama.service.master.MasterItemService;
 
 import java.util.List;

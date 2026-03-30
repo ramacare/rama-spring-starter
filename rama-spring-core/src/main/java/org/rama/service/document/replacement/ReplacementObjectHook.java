@@ -1,4 +1,4 @@
-package org.rama.service.document.template;
+package org.rama.service.document.replacement;
 
 import java.lang.reflect.Method;
 import java.util.Map;

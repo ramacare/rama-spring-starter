@@ -3,6 +3,7 @@ package org.rama.service.document.template;
 import com.jayway.jsonpath.JsonPath;
 import org.rama.entity.asset.AssetFile;
 import org.rama.service.StorageProvider;
+import org.rama.service.document.replacement.ReplacementHooks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
