@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 4.0.0)'
+        required: true
 
 jobs:
   publish:
@@ -20,15 +25,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set version
-        run: ./mvnw versions:set -DnewVersion=${{ steps.version.outputs.VERSION }} -DgenerateBackupPoms=false
+        run: mvn versions:set -DnewVersion=${{ steps.version.outputs.VERSION }} -DgenerateBackupPoms=false
 
       - name: Deploy to local staging directory
-        run: ./mvnw deploy -DskipTests -Dmaven.javadoc.skip=true -DaltDeploymentRepository=staging::file://$(pwd)/staging
+        run: mvn deploy -DskipTests -Dmaven.javadoc.skip=true -DaltDeploymentRepository=staging::file://$(pwd)/staging
 
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
