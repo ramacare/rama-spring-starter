@@ -22,9 +22,9 @@ That means the consumer application can replace starter behavior by declaring it
 
 ```java
 import com.meilisearch.sdk.Client;
-import org.rama.starter.crypto.TextEncryptor;
-import org.rama.starter.meilisearch.service.MeilisearchErrorHandler;
-import org.rama.starter.service.environment.StaticValueResolver;
+import org.rama.crypto.TextEncryptor;
+import org.rama.meilisearch.service.MeilisearchErrorHandler;
+import org.rama.service.environment.StaticValueResolver;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

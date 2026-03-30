@@ -1,0 +1,227 @@
+---
+databaseChangeLog:
+- property:
+    name: clobType
+    value: clob
+- property:
+    name: clobType
+    value: "nvarchar(max)"
+    dbms: mssql
+- property:
+    name: clobType
+    value: longtext
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: timestamp
+- property:
+    name: timestampType
+    value: "datetime2(3)"
+    dbms: mssql
+- property:
+    name: timestampType
+    value: "datetime(3)"
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: "timestamp(3)"
+    dbms: postgresql
+- changeSet:
+    id: rama-spring-master-001-master-group
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: master_group
+    changes:
+    - createTable:
+        tableName: master_group
+        columns:
+        - column:
+            name: group_key
+            type: VARCHAR(255)
+            constraints:
+              primaryKey: true
+              primaryKeyName: master_group_groupKey
+              nullable: false
+        - column:
+            name: group_name
+            type: VARCHAR(1000)
+            constraints:
+              nullable: false
+        - column:
+            name: description
+            type: VARCHAR(2000)
+        - column:
+            name: properties_template
+            type: ${clobType}
+        - column:
+            name: default_properties
+            type: ${clobType}
+        - column:
+            name: status_code
+            type: VARCHAR(100)
+            defaultValue: active
+            constraints:
+              nullable: false
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+- changeSet:
+    id: rama-spring-master-002-master-id
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: master_id
+    changes:
+    - createTable:
+        tableName: master_id
+        columns:
+        - column:
+            name: id
+            type: INT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              primaryKeyName: master_id_id
+              nullable: false
+        - column:
+            name: id_type
+            type: VARCHAR(50)
+            constraints:
+              nullable: false
+        - column:
+            name: prefix
+            type: VARCHAR(50)
+            constraints:
+              nullable: false
+        - column:
+            name: running_number
+            type: INT
+            constraints:
+              nullable: false
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: master_id
+        indexName: ix_master_id__id_type_prefix
+        columns:
+        - column:
+            name: id_type
+        - column:
+            name: prefix
+- changeSet:
+    id: rama-spring-master-003-master-item
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: master_item
+    changes:
+    - createTable:
+        tableName: master_item
+        columns:
+        - column:
+            name: id
+            type: VARCHAR(255)
+            constraints:
+              primaryKey: true
+              primaryKeyName: master_item_id
+              nullable: false
+        - column:
+            name: group_key
+            type: VARCHAR(50)
+            constraints:
+              nullable: false
+        - column:
+            name: item_code
+            type: VARCHAR(50)
+            constraints:
+              nullable: false
+        - column:
+            name: item_value
+            type: VARCHAR(1000)
+            constraints:
+              nullable: false
+        - column:
+            name: item_value_alternative
+            type: VARCHAR(1000)
+        - column:
+            name: ordering
+            type: INT
+            defaultValueNumeric: '0'
+        - column:
+            name: keyword
+            type: VARCHAR(2000)
+        - column:
+            name: filter_text
+            type: VARCHAR(50)
+        - column:
+            name: properties
+            type: ${clobType}
+        - column:
+            name: status_code
+            type: VARCHAR(100)
+            defaultValue: active
+            constraints:
+              nullable: false
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: master_item
+        indexName: ux_master_item__group_key_item_code
+        unique: true
+        columns:
+        - column:
+            name: group_key
+        - column:
+            name: item_code
+    - createIndex:
+        tableName: master_item
+        indexName: ix_master_item__group_key_item_code_filter_text
+        columns:
+        - column:
+            name: group_key
+        - column:
+            name: item_code
+        - column:
+            name: filter_text

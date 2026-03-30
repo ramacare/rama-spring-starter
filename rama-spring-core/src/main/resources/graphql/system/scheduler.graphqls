@@ -1,0 +1,38 @@
+extend type Query {
+    scheduleJobClasses: Response
+    scheduleJob: [ScheduleJob]
+    scheduleJobTrigger: [ScheduleJobTrigger]
+    scheduleJobByNameAndGroup(name: String!, group: String!): ScheduleJob
+}
+
+extend type Mutation {
+    createScheduleJobCron(name: String!, group: String!, cronExpression: String!, jobClass: String!, description: String, jobData: JSON): Response
+    createScheduleJobOneTime(name: String!, group: String!, jobClass: String!, description: String, jobData: JSON): Response
+    createScheduleJobWithScheduler(name: String!, group: String!, cronExpression: String, jobClass: String!, description: String, jobData: JSON, scheduler: String): Response
+    pauseScheduleJob(name: String!, group: String!): Response
+    resumeScheduleJob(name: String!, group: String!): Response
+    deleteScheduleJob(name: String!, group: String!): Response
+    triggerScheduleJob(name: String!, group: String!): Response
+}
+
+type ScheduleJob {
+    name: String!
+    group: String!
+    description: String
+    dataMap: JSON
+    scheduler: String
+}
+
+type ScheduleJobTrigger {
+    jobName: String!
+    jobGroup: String!
+    triggerName: String!
+    triggerGroup: String!
+    triggerType: String!
+    cronExpression: String
+    repeatCount: Int
+    repeatInterval: Long
+    nextFireTime: DateTime
+    previousFireTime: DateTime
+    scheduler: String
+}

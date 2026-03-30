@@ -1,0 +1,76 @@
+extend type Query {
+	masterItemByGroupKeyAndItemCode(groupKey: String!, itemCode: String!): MasterItem
+  	masterItemByGroupKey(groupKey: String!): [MasterItem]
+	masterItemByGroupKeyAndFilterText(groupKey: String!,filterText: String): [MasterItem]
+	masterItemByGroupKeyPageable(groupKey: String!,pageable: PageableInput!): MasterItemPage
+	masterItemByExampleFirst(example: MasterItemExample): MasterItem
+	masterItemByExamplePageable(example: MasterItemExample, pageable: PageableInput!): MasterItemPage
+	masterItemByGroupKeyAndItemCodeIn(groupKey: String!, itemCodes: [String]): [MasterItem]
+	masterItemByCriteria(criteria: [CriteriaItemInput]!): [MasterItem]
+	masterItemByCriteriaPageable(criteria: [CriteriaItemInput]!, pageable: PageableInput!): MasterItemPage
+	masterItemTerminatedPageable(pageable: PageableInput!): MasterItemPage
+}
+
+extend type Mutation {
+	createMasterItem(input: MasterItemInput!): MasterItem
+	updateMasterItem(input: MasterItemInput!): MasterItem
+	deleteMasterItem(input: MasterItemInput!): MasterItem
+}
+
+type MasterItem {
+	id: ID!
+	groupKey: String!
+	itemCode: String!
+	itemValue: String!
+	itemValueAlternative: String
+	ordering: Int
+	keyword: String
+	filterText: String
+	properties: JSON
+	statusCode: String!
+	userstampField: UserstampField
+    timestampField: TimestampField
+}
+
+type MasterItemPage {
+	meta: PageableMeta,
+	data: [MasterItem]
+}
+
+input MasterItemInput {
+	id: ID
+	groupKey: String!
+	itemCode: String!
+	itemValue: String!
+	itemValueAlternative: String
+	ordering: Int
+	keyword: String
+	filterText: String
+	properties: JSON
+	statusCode: String = "active"
+}
+
+input MasterItemUpdate{
+	id: ID
+	groupKey: String!
+	itemCode: String!
+	itemValue: String!
+	itemValueAlternative: String
+	ordering: Int
+	keyword: String
+	filterText: String
+	properties: JSON
+	statusCode: String!
+	timestampField: TimestampFieldInput
+}
+
+input MasterItemExample {
+	groupKey: String!
+	itemCode: String
+	itemValue: String
+	itemValueAlternative: String
+	ordering: Int
+	keyword: String
+	filterText: String
+	statusCode: String
+}

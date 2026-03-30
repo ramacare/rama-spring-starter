@@ -1,0 +1,34 @@
+type MasterId {
+    id: Int
+    idType: String
+    prefix: String
+    runningNumber: Int
+    userstampField: UserstampField
+    timestampField: TimestampField
+}
+
+type MasterIdPage {
+    meta: PageableMeta
+    data: [MasterId]
+}
+
+extend type Query {
+    masterId: [MasterId]
+    masterIdPageable(pageable: PageableInput!): MasterIdPage
+}
+
+extend type Mutation {
+    createMasterId(input: CreateMasterIdInput!): MasterId
+    updateMasterId(input: UpdateMasterIdInput!): MasterId
+}
+
+input CreateMasterIdInput {
+    idType: String!
+    prefix: String
+    runningNumber: Int = 0
+}
+
+input UpdateMasterIdInput {
+    id: Int!
+    runningNumber: Int!
+}

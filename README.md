@@ -26,8 +26,8 @@ Add the consumer dependency:
 Minimal config:
 
 ```properties
-rama.starter.liquibase.enabled=true
-rama.starter.document.gotenberg-server=http://localhost:3000
+rama.liquibase.enabled=true
+rama.document.gotenberg-server=http://localhost:3000
 ```
 
 ## Documentation
@@ -91,6 +91,16 @@ org.rama.starter
 ```bash
 mvn -DskipTests verify
 ```
+
+## Public Release Readiness
+
+The project is now prepared for Maven Central style publishing:
+
+- metadata and license are present in the parent POM
+- source/javadoc/signing plugins are configured
+- GitLab CI includes tag-driven Central publish preparation
+- Liquibase changelogs are guarded so existing tables are marked ran instead of recreated
+- release flow uses `v...` tags only
 
 ## Consumer Dependency Rule
 

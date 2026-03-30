@@ -52,13 +52,13 @@ At minimum, configure the pieces your application uses.
 Example:
 
 ```properties
-rama.starter.storage.file-storage-location=s3
-rama.starter.storage.minio-endpoint=http://localhost:9000
-rama.starter.storage.minio-access-key=minioadmin
-rama.starter.storage.minio-secret-key=minioadmin
+rama.storage.file-storage-location=s3
+rama.storage.minio-endpoint=http://localhost:9000
+rama.storage.minio-access-key=minioadmin
+rama.storage.minio-secret-key=minioadmin
 
-rama.starter.document.gotenberg-server=http://localhost:3000
-rama.starter.liquibase.enabled=true
+rama.document.gotenberg-server=http://localhost:3000
+rama.liquibase.enabled=true
 ```
 
 Full example:
@@ -103,7 +103,7 @@ rama:
 Enable revision support:
 
 ```properties
-rama.starter.revision.enabled=true
+rama.revision.enabled=true
 ```
 
 Annotate your entity:
@@ -119,7 +119,7 @@ public class MyEntity {
 Enable Mongo support:
 
 ```properties
-rama.starter.mongo.enabled=true
+rama.mongo.enabled=true
 ```
 
 Annotate your entity:
@@ -138,8 +138,8 @@ public class MyEntity {
 Enable Meilisearch support:
 
 ```properties
-rama.starter.meilisearch.enabled=true
-rama.starter.meilisearch.host-url=http://localhost:7700
+rama.meilisearch.enabled=true
+rama.meilisearch.host-url=http://localhost:7700
 ```
 
 Annotate your entity:
@@ -159,7 +159,7 @@ public class MyEntity {
 Enable starter GraphQL wiring:
 
 ```properties
-rama.starter.graphql.enabled=true
+rama.graphql.enabled=true
 ```
 
 ## 5. Notes For Consumer Apps

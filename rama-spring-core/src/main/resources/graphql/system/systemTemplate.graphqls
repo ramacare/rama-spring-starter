@@ -1,0 +1,47 @@
+extend type Query {
+    systemTemplate: [SystemTemplate]
+    systemTemplateById(id: ID!): SystemTemplate
+    systemTemplatePageable(pageable: PageableInput!): SystemTemplatePage
+    systemTemplateByExamplePageable(example: SystemTemplateExample, pageable: PageableInput!): SystemTemplatePage
+    systemTemplateTerminatedPageable(pageable: PageableInput!): SystemTemplatePage
+}
+
+extend type Mutation {
+    createSystemTemplate(input: SystemTemplateInput!): SystemTemplate
+    updateSystemTemplate(input: SystemTemplateUpdate!): SystemTemplate
+    deleteSystemTemplate(input: SystemTemplateUpdate!): SystemTemplate
+}
+
+type SystemTemplate {
+    id: ID!
+    template: String
+    templateScript: String
+    statusCode: String!
+    userstampField: UserstampField
+    timestampField: TimestampField
+}
+
+type SystemTemplatePage {
+    meta: PageableMeta,
+    data: [SystemTemplate]
+}
+
+input SystemTemplateInput {
+    id: ID
+    template: String
+    templateScript: String
+    statusCode: String = "active"
+}
+
+input SystemTemplateUpdate {
+    id: ID!
+    template: String
+    templateScript: String
+    statusCode: String = "active"
+    timestampField: TimestampFieldInput
+}
+
+input SystemTemplateExample {
+    id: ID
+    statusCode: String
+}

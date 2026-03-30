@@ -1,0 +1,21 @@
+extend type Query {
+    apiHeaderSetById(id: String!) : ApiHeaderSet
+}
+
+extend type Mutation {
+    createApiHeaderSet(input: ApiHeaderSetInput!): ApiHeaderSet
+    updateApiHeaderSet(input: ApiHeaderSetInput!): ApiHeaderSet
+}
+
+type ApiHeaderSet {
+    id: String!
+    headers: JSON!
+    timestampField: TimestampField
+    userstampField: UserstampField
+}
+
+input ApiHeaderSetInput {
+    id: String!
+    headers: JSON!
+    timestampField: TimestampFieldInput
+}

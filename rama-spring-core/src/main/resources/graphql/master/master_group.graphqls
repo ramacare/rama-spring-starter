@@ -1,0 +1,52 @@
+extend type Query {
+  	masterGroup: [MasterGroup]
+	masterGroupPageable(pageable: PageableInput!) : MasterGroupPage
+	masterGroupByGroupKey(groupKey: String): MasterGroup
+	masterGroupByGeneral: [MasterGroup]
+	masterGroupByGeneralPageable(pageable: PageableInput!) : MasterGroupPage
+	masterGroupBySystem: [MasterGroup]
+    masterGroupBySystemPageable(pageable: PageableInput!) : MasterGroupPage
+    masterGroupTerminatedPageable (pageable: PageableInput!) : MasterGroupPage
+}
+
+extend type Mutation {
+	createMasterGroup(input: MasterGroupInput!): MasterGroup
+	updateMasterGroup(input: MasterGroupUpdate!): MasterGroup
+	deleteMasterGroup(input: MasterGroupInput!): MasterGroup
+}
+
+type MasterGroup {
+	groupKey: String!
+	groupName: String!
+	description: String
+	propertiesTemplate: String
+	defaultProperties: JSON
+	statusCode: String!
+	userstampField: UserstampField
+    timestampField: TimestampField
+    masterItems: [MasterItem]
+}
+
+input MasterGroupInput {
+	groupKey: String!
+	groupName: String!
+	description: String
+	propertiesTemplate: String
+	defaultProperties: JSON
+	statusCode: String = "active"
+}
+
+input MasterGroupUpdate {
+	groupKey: String!
+	groupName: String!
+	description: String
+	propertiesTemplate: String
+	defaultProperties: JSON
+	statusCode: String!
+	timestampField: TimestampFieldInput
+}
+
+type MasterGroupPage {
+	meta: PageableMeta
+	data: [MasterGroup]
+}

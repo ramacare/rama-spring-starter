@@ -1,0 +1,318 @@
+---
+databaseChangeLog:
+- property:
+    name: clobType
+    value: clob
+- property:
+    name: clobType
+    value: "nvarchar(max)"
+    dbms: mssql
+- property:
+    name: clobType
+    value: longtext
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: timestamp
+- property:
+    name: timestampType
+    value: "datetime2(3)"
+    dbms: mssql
+- property:
+    name: timestampType
+    value: "datetime(3)"
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: "timestamp(3)"
+    dbms: postgresql
+- changeSet:
+    id: rama-spring-system-001-client-config
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: client_config
+    changes:
+    - createTable:
+        tableName: client_config
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: computer_name
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: fingerprint
+            type: VARCHAR(255)
+        - column:
+            name: configuration
+            type: ${clobType}
+        - column:
+            name: last_seen_datetime
+            type: ${timestampType}
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: client_config
+        indexName: ux_client_config__computer_name
+        unique: true
+        columns:
+        - column:
+            name: computer_name
+    - createIndex:
+        tableName: client_config
+        indexName: ix_client_config__fingerprint
+        columns:
+        - column:
+            name: fingerprint
+- changeSet:
+    id: rama-spring-system-002-system-log
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: system_log
+    changes:
+    - createTable:
+        tableName: system_log
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: log_level
+            type: VARCHAR(100)
+            defaultValue: INFO
+            constraints:
+              nullable: false
+        - column:
+            name: log_key
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: message
+            type: VARCHAR(1000)
+            constraints:
+              nullable: false
+        - column:
+            name: detail
+            type: ${clobType}
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: system_log
+        indexName: ix_system_log__log_key_log_level
+        columns:
+        - column:
+            name: log_key
+        - column:
+            name: log_level
+    - createIndex:
+        tableName: system_log
+        indexName: ix_system_log__log_level
+        columns:
+        - column:
+            name: log_level
+    - createIndex:
+        tableName: system_log
+        indexName: ix_system_log__created_at
+        columns:
+        - column:
+            name: created_at
+- changeSet:
+    id: rama-spring-system-003-system-parameter
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: system_parameter
+    changes:
+    - createTable:
+        tableName: system_parameter
+        columns:
+        - column:
+            name: parameter_key
+            type: VARCHAR(255)
+            constraints:
+              primaryKey: true
+              primaryKeyName: parameter_key_key
+              nullable: false
+        - column:
+            name: parameter_value
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+- changeSet:
+    id: rama-spring-system-005-system-template
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: system_template
+    changes:
+    - createTable:
+        tableName: system_template
+        columns:
+        - column:
+            name: id
+            type: VARCHAR(255)
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: template
+            type: ${clobType}
+        - column:
+            name: template_script
+            type: ${clobType}
+        - column:
+            name: status_code
+            type: VARCHAR(50)
+            constraints:
+              nullable: false
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: system_template
+        indexName: ix_system_template__status_code
+        columns:
+        - column:
+            name: status_code
+- changeSet:
+    id: rama-spring-system-006-revision
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: revision
+    changes:
+    - createTable:
+        tableName: revision
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: revision_key
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: mrn
+            type: VARCHAR(100)
+        - column:
+            name: revision_entity
+            type: VARCHAR(255)
+        - column:
+            name: revision_datetime
+            type: ${timestampType}
+            constraints:
+              nullable: false
+        - column:
+            name: revision_data
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: revision_change
+            type: ${clobType}
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: revision
+        indexName: ix_revision__revision_key
+        columns:
+        - column:
+            name: revision_key
+    - createIndex:
+        tableName: revision
+        indexName: ix_revision__revision_entity_mrn
+        columns:
+        - column:
+            name: revision_entity
+        - column:
+            name: mrn

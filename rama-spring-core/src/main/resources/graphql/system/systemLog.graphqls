@@ -1,0 +1,23 @@
+extend type Query {
+    systemLogByExamplePageable(example: SystemLogExample,pageable: PageableInput!) : SystemLogPage
+}
+
+type SystemLog {
+    id: ID!
+    logLevel: String!
+    logKey: String!
+    message: String!
+    detail: JSON
+    userstampField: UserstampField
+    timestampField: TimestampField
+}
+
+type SystemLogPage {
+    meta: PageableMeta,
+    data: [SystemLog]
+}
+
+input SystemLogExample {
+    logLevel: String
+    logKey: String
+}

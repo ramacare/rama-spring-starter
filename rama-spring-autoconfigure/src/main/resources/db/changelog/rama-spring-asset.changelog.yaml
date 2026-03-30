@@ -1,0 +1,89 @@
+---
+databaseChangeLog:
+- property:
+    name: timestampType
+    value: timestamp
+- property:
+    name: timestampType
+    value: "datetime2(3)"
+    dbms: mssql
+- property:
+    name: timestampType
+    value: "datetime(3)"
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: "timestamp(3)"
+    dbms: postgresql
+- changeSet:
+    id: rama-spring-asset-001-asset-file
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: asset_file
+    changes:
+    - createTable:
+        tableName: asset_file
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              primaryKeyName: asset_file_id
+              nullable: false
+        - column:
+            name: file_name
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: file_type
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: md5hash
+            type: VARCHAR(50)
+            constraints:
+              nullable: false
+        - column:
+            name: original_file_name
+            type: VARCHAR(255)
+        - column:
+            name: location
+            type: VARCHAR(20)
+            constraints:
+              nullable: false
+        - column:
+            name: bucket_name
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: asset_file
+        indexName: ix_asset_file__location_bucket_name_md5hash
+        columns:
+        - column:
+            name: location
+        - column:
+            name: bucket_name
+        - column:
+            name: md5hash

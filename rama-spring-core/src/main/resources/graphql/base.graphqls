@@ -1,0 +1,85 @@
+scalar JSON
+scalar DateTime
+scalar Date
+scalar Long
+
+directive @Size(min : Int = 0, max : Int = 2147483647, message : String = "graphql.validation.Size.message") on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
+directive @Email on ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
+
+type Query {
+}
+
+type Mutation {
+}
+
+type TimestampField {
+    createdAt: DateTime
+    updatedAt: DateTime
+}
+
+type UserstampField {
+    createdBy: String
+    updatedBy: String
+}
+
+type SortCriteria {
+    key: String
+    order: String
+}
+
+type PageableMeta {
+    page: Int
+    perPage: Int
+    sortBy: [SortCriteria]
+    totalPages: Int
+    totalItems: Long
+}
+
+type Response {
+    success: Boolean!
+    data: JSON
+    message: String
+}
+
+input TimestampFieldInput {
+    createdAt: DateTime
+    updatedAt: DateTime
+}
+
+input SortCriteriaInput {
+    key: String!
+    order: String="asc"
+}
+
+input PageableInput {
+    page: Int=1
+    perPage: Int!
+    sortBy: [SortCriteriaInput]
+}
+
+input CriteriaItemInput {
+    key: String!
+    value: JSON!
+    operator: String
+}
+
+type Base64File {
+    fileName: String
+    base64String: String!
+}
+
+input Base64FileInput {
+    id: Long
+    category: String
+    fileName: String
+    base64String: String
+}
+
+input UserstampFieldInput {
+    createdBy: String
+    updatedBy: String
+}
+
+input DeleteInput{
+    id: Long!
+}

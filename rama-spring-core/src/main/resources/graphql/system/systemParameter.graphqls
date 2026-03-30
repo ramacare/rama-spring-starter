@@ -1,0 +1,27 @@
+extend type Query {
+    systemParameter : [SystemParameter]
+    systemParameterPageable(pageable: PageableInput!) : SystemParameterPage
+    systemParameterByParameterKey(parameterKey:String!): SystemParameter
+}
+
+extend type Mutation {
+    createSystemParameter(input: SystemParameterInput!): SystemParameter
+    updateSystemParameter(input: SystemParameterInput!): SystemParameter
+}
+
+input SystemParameterInput {
+    parameterKey: String
+    parameterValue: String
+}
+
+type SystemParameter {
+    parameterKey: String
+    parameterValue: String
+    userstampField: UserstampField
+    timestampField: TimestampField
+}
+
+type SystemParameterPage {
+    meta: PageableMeta,
+    data: [SystemParameter]
+}

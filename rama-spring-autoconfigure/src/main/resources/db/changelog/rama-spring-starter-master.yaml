@@ -1,0 +1,9 @@
+databaseChangeLog:
+- include:
+    file: db/changelog/rama-spring-api.changelog.yaml
+- include:
+    file: db/changelog/rama-spring-asset.changelog.yaml
+- include:
+    file: db/changelog/rama-spring-master.changelog.yaml
+- include:
+    file: db/changelog/rama-spring-system.changelog.yaml

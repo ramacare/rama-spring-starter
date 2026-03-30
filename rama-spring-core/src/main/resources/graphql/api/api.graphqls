@@ -1,0 +1,46 @@
+extend type Query {
+    api: [Api]
+    apiPageable(pageable: PageableInput!): ApiPage
+    apiByExample(example: ApiExample): [Api]
+    apiByExamplePageable(example: ApiExample,pageable: PageableInput!): ApiPage
+    apiById(id: String!) : Api
+}
+
+extend type Mutation {
+    createApi(input: ApiInput!): Api
+    updateApi(input: ApiInput!): Api
+}
+
+type Api {
+    id: String!
+    sourceApiMethod: String!
+    sourceApiUrl: String!
+    etlCode: String
+    etlCodeError: String
+    apiHeaderSetId: ID
+    apiHeaderSet: ApiHeaderSet
+    timestampField: TimestampField
+}
+
+type ApiPage {
+    meta: PageableMeta,
+    data: [Api]
+}
+
+input ApiInput {
+    id: String!
+    sourceApiMethod: String!
+    sourceApiUrl: String!
+    etlCode: String
+    etlCodeError: String
+    apiHeaderSetId: ID
+}
+
+input ApiExample {
+    id: String
+    sourceApiMethod: String
+    sourceApiUrl: String
+    etlCode: String
+    etlCodeError: String
+    apiHeaderSetId: ID
+}

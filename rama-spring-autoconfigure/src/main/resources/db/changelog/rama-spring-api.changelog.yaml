@@ -1,0 +1,124 @@
+---
+databaseChangeLog:
+- property:
+    name: clobType
+    value: clob
+- property:
+    name: clobType
+    value: "nvarchar(max)"
+    dbms: mssql
+- property:
+    name: clobType
+    value: longtext
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: timestamp
+- property:
+    name: timestampType
+    value: "datetime2(3)"
+    dbms: mssql
+- property:
+    name: timestampType
+    value: "datetime(3)"
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: "timestamp(3)"
+    dbms: postgresql
+- changeSet:
+    id: rama-spring-api-001-api-header-set
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: api_header_set
+    changes:
+    - createTable:
+        tableName: api_header_set
+        columns:
+        - column:
+            name: id
+            type: VARCHAR(255)
+            constraints:
+              primaryKey: true
+              primaryKeyName: api_header_set_id
+              nullable: false
+        - column:
+            name: headers
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+- changeSet:
+    id: rama-spring-api-002-api
+    author: codex
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: api
+    changes:
+    - createTable:
+        tableName: api
+        columns:
+        - column:
+            name: id
+            type: VARCHAR(255)
+            constraints:
+              primaryKey: true
+              primaryKeyName: api_id
+              nullable: false
+        - column:
+            name: source_api_method
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: source_api_url
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: etl_code
+            type: ${clobType}
+        - column:
+            name: etl_code_error
+            type: ${clobType}
+        - column:
+            name: api_header_set_id
+            type: VARCHAR(255)
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: api
+        indexName: idx_api_api_header_set_id
+        columns:
+        - column:
+            name: api_header_set_id

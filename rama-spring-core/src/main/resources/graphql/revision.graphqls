@@ -1,0 +1,17 @@
+extend type Query {
+    revisionByRevisionKey(revisionKey: String!) : [Revision]
+    revisionByRevisionEntityAndMrn(revisionEntity: String!,mrn: String!) : [Revision]
+    revisionByRevisionEntityInAndMrn(revisionEntityIn: [String]!,mrn: String!) : [Revision]
+}
+
+type Revision {
+    id: ID!
+    revisionKey: String!
+    mrn: String
+    revisionEntity: String
+    revisionDatetime: DateTime!
+    revisionData: JSON!
+    revisionChange: JSON
+    userstampField: UserstampField
+    timestampField: TimestampField
+}
