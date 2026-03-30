@@ -105,7 +105,7 @@ import java.time.ZoneOffset;
 import java.util.*;
 
 @AutoConfiguration
-@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class})
+@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class})
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class})
@@ -123,8 +123,8 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "ramaStarterEncryptionInitializer")
-    Object ramaStarterEncryptionInitializer(RamaStarterProperties properties) {
-        EncryptionUtil.setKey(properties.getEncryption().getKey());
+    Object ramaStarterEncryptionInitializer(EncryptProperties encryptProperties) {
+        EncryptionUtil.setKey(encryptProperties.getKey());
         return new Object();
     }
 
@@ -137,19 +137,19 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "rama.storage", name = "minio-endpoint")
-    MinioClient ramaStarterMinioClient(RamaStarterProperties properties) {
+    @ConditionalOnProperty(prefix = "minio", name = "endpoint")
+    MinioClient ramaStarterMinioClient(MinioProperties minioProperties) {
         return MinioClient.builder()
-                .endpoint(properties.getStorage().getMinioEndpoint())
-                .credentials(properties.getStorage().getMinioAccessKey(), properties.getStorage().getMinioSecretKey())
+                .endpoint(minioProperties.getEndpoint())
+                .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
                 .build();
     }
 
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(AssetFileRepository.class)
-    StorageService storageService(RamaStarterProperties properties, AssetFileRepository assetFileRepository, ObjectProvider<MinioClient> minioClientProvider, ObjectProvider<ImageService> imageServiceProvider) {
-        return new StorageService(properties.getStorage().getFileStoragePath(), properties.getStorage().getFileStorageLocation(), assetFileRepository, minioClientProvider, imageServiceProvider);
+    StorageService storageService(AppProperties appProperties, AssetFileRepository assetFileRepository, ObjectProvider<MinioClient> minioClientProvider, ObjectProvider<ImageService> imageServiceProvider) {
+        return new StorageService(appProperties.getFileStoragePath(), appProperties.getFileStorageLocation(), assetFileRepository, minioClientProvider, imageServiceProvider);
     }
 
     @Bean
@@ -257,8 +257,8 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    PdfService pdfService(WebClient.Builder webClientBuilder, RamaStarterProperties properties) {
-        return new PdfService(webClientBuilder, properties.getDocument().getGotenbergServer());
+    PdfService pdfService(WebClient.Builder webClientBuilder, DocumentProperties documentProperties) {
+        return new PdfService(webClientBuilder, documentProperties.getGotenbergServer());
     }
 
     @Bean
@@ -277,8 +277,8 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(StorageProvider.class)
-    DocxTemplatePreprocessor docxTemplatePreprocessor(RamaStarterProperties properties, StorageProvider storageService) {
-        return new DocxTemplatePreprocessor(storageService, properties.getDocument().getPlaceholderPattern());
+    DocxTemplatePreprocessor docxTemplatePreprocessor(DocumentProperties documentProperties, StorageProvider storageService) {
+        return new DocxTemplatePreprocessor(storageService, documentProperties.getPlaceholderPattern());
     }
 
     @Bean
@@ -291,11 +291,11 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(ReplacePlaceholder.class)
-    ReplaceSection replaceSection(RamaStarterProperties properties, ReplacePlaceholder replacePlaceholder) {
+    ReplaceSection replaceSection(DocumentProperties documentProperties, ReplacePlaceholder replacePlaceholder) {
         return new ReplaceSection(
-                properties.getDocument().getSectionStartPattern(),
-                properties.getDocument().getSectionEndPattern(),
-                properties.getDocument().getSectionItemPattern(),
+                documentProperties.getSectionStartPattern(),
+                documentProperties.getSectionEndPattern(),
+                documentProperties.getSectionItemPattern(),
                 replacePlaceholder
         );
     }
@@ -304,7 +304,7 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnBean({PdfService.class, ReplacementProcessor.class, BarcodeService.class, ReplacePlaceholder.class, ReplaceSection.class})
     DocxTemplateProcessor docxTemplateProcessor(
-            RamaStarterProperties properties,
+            DocumentProperties documentProperties,
             BarcodeService barcodeService,
             PdfService pdfService,
             ReplacementProcessor replacementProcessor,
@@ -312,9 +312,9 @@ public class RamaStarterAutoConfiguration {
             ReplaceSection replaceSection
     ) {
         return new DocxTemplateProcessor(
-                properties.getDocument().getPlaceholderPattern(),
-                properties.getDocument().getRepeatAttributeProperty(),
-                properties.getDocument().getMaximumPagesProperty(),
+                documentProperties.getPlaceholderPattern(),
+                documentProperties.getRepeatAttributeProperty(),
+                documentProperties.getMaximumPagesProperty(),
                 barcodeService,
                 pdfService,
                 replacementProcessor,
@@ -463,9 +463,9 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = "rama.meilisearch", name = "host-url")
-    Client ramaStarterMeilisearchClient(RamaStarterProperties properties) {
-        return new Client(new Config(properties.getMeilisearch().getHostUrl(), properties.getMeilisearch().getApiKey()));
+    @ConditionalOnProperty(prefix = "meilisearch", name = "host")
+    Client ramaStarterMeilisearchClient(MeilisearchProperties meilisearchProperties) {
+        return new Client(new Config(meilisearchProperties.getHost(), meilisearchProperties.getMasterKey()));
     }
 
     @Bean

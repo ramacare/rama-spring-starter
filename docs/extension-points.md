@@ -2,97 +2,124 @@
 
 ## Override Model
 
-Most starter beans are registered with `@ConditionalOnMissingBean`.
-
-That means the consumer application can replace starter behavior by declaring its own bean of the same type.
+Most starter beans use `@ConditionalOnMissingBean`. Declare your own bean of the same type to replace starter behavior.
 
 ## Common Override Points
 
-- `TextEncryptor`
-- `StaticValueResolver`
-- `MeilisearchErrorHandler`
-- `Client` for Meilisearch
-- `MinioClient`
-- `ObjectMapper`
-- `WebClient.Builder`
-- `RuntimeWiringConfigurer`
-- any starter service bean
+| Bean Type | Default Behavior | Override When |
+|-----------|-----------------|---------------|
+| `StaticValueResolver` | Loads from MasterItem table with TTL cache | Custom static value source |
+| `MeilisearchErrorHandler` | Logs errors + writes to SystemLog | Custom error handling |
+| `ObjectMapper` | Jackson defaults (lenient) | Custom serialization |
+| `WebClient.Builder` | 5MB max in-memory | Different limits |
+| `RuntimeWiringConfigurer` | Email validation + BigDecimal scalar | Custom GraphQL wiring |
+| `StarterGraphqlExceptionResolver` | Generic error formatting | Custom error responses |
 
-## Example Overrides
+## Replacement Hooks
+
+Extend document template processing with custom hooks:
+
+### ReplacementObjectHook
+
+Transform object values before string conversion. Includes `extractMrn()` helper.
 
 ```java
-import com.meilisearch.sdk.Client;
-import org.rama.crypto.TextEncryptor;
-import org.rama.meilisearch.service.MeilisearchErrorHandler;
-import org.rama.service.environment.StaticValueResolver;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
-public class RamaStarterOverrides {
-
-    @Bean
-    TextEncryptor textEncryptor() {
-        return new MyTextEncryptor();
+@Component
+public class PatientHooks implements ReplacementObjectHook {
+    @Override
+    public Object process(Object replacement, Map<String, String> attributes) {
+        if (attributes.containsKey("patient")) {
+            // transform patient data
+        }
+        return replacement;
     }
 
-    @Bean
-    StaticValueResolver staticValueResolver() {
-        return new MyStaticValueResolver();
-    }
+    @Override
+    public int getOrder() { return 1; }
+}
+```
 
-    @Bean
-    MeilisearchErrorHandler meilisearchErrorHandler() {
-        return new MyMeilisearchErrorHandler();
-    }
+### ReplacementStringHook
 
-    @Bean
-    Client meilisearchClient() {
-        return new Client("http://localhost:7700", "masterKey");
+Transform string values after object-to-string conversion:
+
+```java
+@Component
+public class MaskHooks implements ReplacementStringHook {
+    @Override
+    public String process(String replacement, Map<String, String> attributes) {
+        if (attributes.containsKey("mask")) {
+            return replacement.replaceAll(attributes.get("pattern"), attributes.get("mask"));
+        }
+        return replacement;
     }
 }
 ```
 
-## Application-Specific Mapper Pattern
+### ReplacementTransformer
 
-The starter provides extension contracts, not your app’s concrete implementations.
+Transform the entire replacement data map before template processing:
 
-### Mongo
+```java
+@Component
+public class MyTransformer implements ReplacementTransformer {
+    @Override
+    public void transform(Map<String, Object> replacements, String mrn, String encounterId) {
+        replacements.put("customField", computeValue(mrn));
+    }
 
-Implement:
+    @Override
+    public String getTemplateCode() { return "MY_TEMPLATE"; }
+}
+```
 
-- `IMongoMapper`
-- application-specific Mongo document class
+## Mongo Mapper
 
-Then annotate the JPA entity with `@SyncToMongo`.
+Implement `IMongoMapper` for custom JPA-to-MongoDB mapping:
 
-### Meilisearch
+```java
+@Mapper
+public interface MyMongoMapper extends IMongoMapper<MyEntity, MyMongoDocument> {
+    MyMongoDocument map(MyEntity source);
+}
+```
 
-Implement:
+Annotate the entity with `@SyncToMongo(mongoClass = ..., mapperClass = ...)`.
 
-- `IMeilisearchMapper` when default Jackson conversion is not enough
+## Meilisearch Mapper
 
-Then annotate the entity with `@SyncToMeilisearch`.
+Implement `IMeilisearchMapper` when default Jackson serialization isn't enough:
 
-## Encryption
+```java
+@Component
+public class MyMeilisearchMapper implements IMeilisearchMapper<MyEntity> {
+    @Override
+    public Map<String, Object> toDocument(MyEntity entity) {
+        // custom mapping
+    }
+}
+```
 
-The starter includes:
+## GraphQL Exception Resolver
 
-- `Encrypt`
-- `JsonEncryptConverter`
+Extend `StarterGraphqlExceptionResolver` for app-specific exceptions:
 
-Without a custom `TextEncryptor`, encryption is effectively no-op.
+```java
+@Component
+public class AppExceptionResolver extends StarterGraphqlExceptionResolver {
+    public AppExceptionResolver(Environment environment) {
+        super(environment);
+    }
 
-If the field must be truly encrypted, the application must provide a real `TextEncryptor` implementation.
-
-## Static Value Resolution
-
-Default behavior uses `StaticValueService` backed by `MasterItemService`.
-
-If the app needs different behavior, replace `StaticValueResolver`.
-
-## GraphQL Wiring
-
-The starter wires common validation and scalars.
-
-If the consumer app wants different GraphQL behavior, it can register its own `RuntimeWiringConfigurer`.
+    @Override
+    protected List<GraphQLError> resolveCustomErrors(Throwable ex, DataFetchingEnvironment env) {
+        if (ex instanceof MyAppException e) {
+            return List.of(GraphqlErrorBuilder.newError()
+                .message(e.getMessage())
+                .errorType(ErrorClassification.errorClassification("AppError"))
+                .build());
+        }
+        return null;
+    }
+}
+```

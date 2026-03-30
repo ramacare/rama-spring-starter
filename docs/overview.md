@@ -1,128 +1,100 @@
-# Package Overview
+# Architecture Overview
 
-## Purpose
+## Package Namespace
 
-`rama-spring-starter` packages reusable platform code from `ramaservice` into an installable internal starter.
+All code lives under `org.rama`. Consumer applications use the same base package.
 
-The goal is to let consumer services depend on shared infrastructure directly instead of duplicating entities, repositories, services, and helper classes.
+## Module Structure
 
-## Modules
+```
+rama-spring-starter-parent (pom)
+  |- rama-spring-core           (runtime code)
+  |- rama-spring-autoconfigure  (Spring Boot wiring)
+  |- rama-spring-boot-starter   (consumer dependency bundle)
+```
 
-### `rama-spring-core`
+## Package Map (`org.rama.*`)
 
-Contains the reusable runtime code:
+### Annotations
+- `annotation` -- `@TrackRevision`, `@SyncToMongo`, `@SyncToMeilisearch`, `@TransformableMap`, `@ApiReturnType`
 
-- entities
-- repositories
-- repository base classes
-- shared services
-- shared annotations
-- shared helpers/utilities
-- template/print infrastructure
-- optional Mongo support classes
-- optional Meilisearch support classes
-- GraphQL directive classes
+### Entities
+- `entity` -- Base types: `Auditable`, `StatusCode`, `Response`, `PageableDTO`, `TimestampField`, `UserstampField`, converters (`JsonConverter`, `Encrypt`)
+- `entity.api` -- `Api`, `ApiHeaderSet`
+- `entity.asset` -- `AssetFile`
+- `entity.master` -- `MasterGroup`, `MasterId`, `MasterItem`
+- `entity.system` -- `SystemLog`, `SystemParameter`, `SystemTemplate`, `ClientConfig`
 
-### `rama-spring-autoconfigure`
+### Repositories
+- `repository` -- `BaseRepository<T,ID>`, `BaseRepositoryImpl`, `SoftDeleteRepository`
+- `repository.api` -- `ApiRepository`, `ApiHeaderSetRepository`
+- `repository.asset` -- `AssetFileRepository`
+- `repository.master` -- `MasterGroupRepository`, `MasterIdRepository`, `MasterItemRepository`
+- `repository.revision` -- `RevisionRepository`
+- `repository.system` -- `SystemLogRepository`, `SystemParameterRepository`, `SystemTemplateRepository`, `ClientConfigRepository`
 
-Contains Spring Boot wiring:
+### Services
+- `service` -- `GenericEntityService`, `GenericApiService`, `GenericMongoService`, `StorageService`, `StorageProvider`, `VaultService`, `RevisionService`
+- `service.master` -- `MasterIdService`, `MasterItemService`
+- `service.system` -- `QuartzService`, `SystemLogService`, `SystemParameterService`, `ClientConfigService`
+- `service.environment` -- `EnvironmentService`, `StaticValueService`, `StaticValueResolver`
 
-- auto-configuration
-- `@ConfigurationProperties`
-- conditional bean registration
-- Hibernate listener registration
-- starter-owned Liquibase changelogs
+### Document Processing
+- `service.document` -- `PdfService`, `BarcodeService`, `BarcodeReaderService`, `ImageService`, `AbstractSignService`, `SigningMaterial`, `VerificationCodeService`
+- `service.document.template` -- `TemplateProcessor`, `DocxTemplateProcessor`, `DocxTemplatePreprocessor`, `ReplacementProcessor`
+- `service.document.template.docx` -- `ReplacePlaceholder`, `ReplaceSection`, `DocxTemplateHelper`
+- `service.document.template.hooks` -- `MasterHooks`, `DatetimeHooks`, `GeneralHooks`, `CheckBoxHooks`, `JoinHooks`, `StringArrayHooks`
+- `service.document.printTemplate` -- `TemplatePreprocessor`
+- `service.document.replacement` -- `ReplacementHooks`, `ReplacementObjectHook`, `ReplacementStringHook`
+- `service.document.transformers` -- `ReplacementTransformer`
 
-### `rama-spring-boot-starter`
+### Controllers (GraphQL)
+- `controller.api` -- `ApiController`, `ApiHeaderSetController`
+- `controller.asset` -- `AssetFileController`
+- `controller.master` -- `MasterGroupController`, `MasterIdController`, `MasterItemController`
+- `controller.system` -- `ClientConfigController`, `SchedulerController`, `SystemLogController`, `SystemParameterController`, `SystemTemplateController`
+- `controller` -- `RevisionController`
 
-Consumer-facing dependency bundle.
+### Listeners
+- `listener.global` -- Hibernate event listeners for audit (`GlobalAuditablePreInsertListener`, `GlobalAuditablePreUpdateListener`) and revision tracking (`GlobalPostInsertRevisionListener`, `GlobalPostUpdateRevisionListener`)
 
-Applications should normally depend on this module, not on `core` or `autoconfigure` directly.
+### MongoDB
+- `mongo` -- `IndexAwareMongoTemplate`
+- `mongo.document` -- `MasterItem` (Mongo document)
+- `mongo.indexing` -- `DeferredIndexManager`, `IndexFieldExtractor`
+- `mongo.listener` -- `GlobalPostInsertSyncToMongoListener`, `GlobalPostUpdateSyncToMongoListener`
+- `mongo.mapper` -- `IMongoMapper`, `MongoMasterItemMapper`
+- `mongo.service` -- `MongoSyncService`
 
-This module now bundles the standard shared Spring stack used by Rama services, so consumer applications do not need to repeat the common Spring Boot starter list.
+### Meilisearch
+- `meilisearch` -- `MeilisearchIndexInitializer`
+- `meilisearch.listener` -- `GlobalPostInsertMeilisearchListener`, `GlobalPostUpdateMeilisearchListener`
+- `meilisearch.mapper` -- `IMeilisearchMapper`, `DefaultMeilisearchMapper`
+- `meilisearch.service` -- `MeilisearchService`, `MeilisearchErrorHandler`, `LoggingMeilisearchErrorHandler`
 
-## Included Areas
+### GraphQL
+- `graphql.directive` -- `EmailConstraint`, `AbstractPredefinedPatternConstraint`
+- `graphql` -- `StarterGraphqlExceptionResolver`
 
-### Shared entity families
+### Utilities
+- `util` -- `AgeUtil`, `DateTimeUtil`, `EncryptionUtil`, `HashUtil`, `HibernateUtil`, `MongoDBUtil`, `NumberUtil`, `QueryUtil`, `SanitizeUtil`, `StreamUtil`, `XMLUtil`, `ExceptionUtil`
 
-- `system*`
-- `api*`
-- `asset*`
-- `master*`
-- `revision`
+### Auto-Configuration
+- `autoconfigure` -- `RamaStarterAutoConfiguration`, `RamaStarterProperties`, `RamaStarterLiquibaseProperties`
 
-### Shared infrastructure
-
-- base repository and repository implementation
-- Querydsl helpers
-- generic entity helper service
-- generic API service
-- storage/object-storage service
-- vault service
-- reusable print/template infrastructure
-- barcode/image/pdf/template helpers
-- audit/revision listeners and services
-- environment/static-value helpers
-
-### Shared annotations
-
-- `ApiReturnType`
-- `ApiReturnTypes`
-- `TrackRevision`
-- `SyncToMongo`
-- `SyncToMeilisearch`
-- `TransformableMap`
-
-### Shared helpers
-
-- `Response`
-- `AgeUtil`
-- `HashUtil`
-- `XMLUtil`
-- `HibernateUtil`
-- `Encrypt`
-- `JsonEncryptConverter`
-
-### Optional platform extensions
-
-- Mongo sync and indexing helpers
-- Meilisearch sync and indexing helpers
-- GraphQL validation/scalar wiring
-
-### Bundled Spring stack
+## Bundled Spring Stack
 
 `rama-spring-boot-starter` includes:
-
-- `spring-boot-starter`
-- `spring-boot-starter-web`
-- `spring-boot-starter-webflux`
-- `spring-boot-starter-data-jpa`
-- `spring-boot-starter-data-mongodb`
-- `spring-boot-starter-validation`
-- `spring-boot-starter-security`
-- `spring-boot-starter-graphql`
-- `spring-boot-starter-liquibase`
+- `spring-boot-starter`, `spring-boot-starter-web`, `spring-boot-starter-webflux`
+- `spring-boot-starter-data-jpa`, `spring-boot-starter-data-mongodb`
+- `spring-boot-starter-validation`, `spring-boot-starter-security`
+- `spring-boot-starter-graphql`, `spring-boot-starter-liquibase`
 - `spring-boot-starter-actuator`
 - `spring-cloud-starter-vault-config`
 
-## Excluded Areas
+## What's NOT Included
 
-The starter intentionally excludes:
-
-- all `patient*`
-- all `encounter*`
-- hospital-specific / EMR-specific logic
-- controllers
-- application bootstrap
-- patient/encounter GraphQL application code
-- patient/document/encounter Mongo concrete documents and mappers
-- patient-specific Meilisearch concrete mappers
-- hospital workflow jobs/listeners/integrations
-
-## Design Principles
-
-- only reusable code is extracted
-- app-specific implementations stay in `ramaservice`
-- optional infrastructure is guarded with conditions and feature flags
-- consumer applications can override starter beans directly
-- starter migrations are isolated from app changelogs
+- Patient, encounter, vital sign, document entities and logic
+- Hospital-specific workflow (jobs, listeners, integrations)
+- Application bootstrap and Keycloak config
+- Domain-specific Mongo/Meilisearch mappers

@@ -1,42 +1,24 @@
-# Consumer Manual
+# Consumer Integration Guide
 
-## 1. Build and Install
-
-If you are testing locally, install the starter into local Maven cache:
-
-```bash
-cd /Users/tantee/IdeaProjects/rama-spring-starter
-mvn -DskipTests clean install
-```
-
-## 2. Add the Dependency
-
-In the consumer service `pom.xml`:
+## 1. Add the Dependency
 
 ```xml
-<dependency>
-    <groupId>org.rama.starter</groupId>
-    <artifactId>rama-spring-boot-starter</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-</dependency>
-```
+<repositories>
+    <repository>
+        <id>github-pages</id>
+        <name>GitHub Pages Maven Repository</name>
+        <url>https://ramacare.github.io/rama-spring-starter</url>
+    </repository>
+</repositories>
 
-For most services, this is the only shared platform dependency you should need. Keep only:
-
-- `rama-spring-boot-starter`
-- JDBC driver
-- app-specific libraries not meant to be centrally bundled
-
-Example:
-
-```xml
 <dependencies>
     <dependency>
-        <groupId>org.rama.starter</groupId>
+        <groupId>org.rama</groupId>
         <artifactId>rama-spring-boot-starter</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>4.0.1</version>
     </dependency>
 
+    <!-- Your JDBC driver -->
     <dependency>
         <groupId>com.microsoft.sqlserver</groupId>
         <artifactId>mssql-jdbc</artifactId>
@@ -45,127 +27,222 @@ Example:
 </dependencies>
 ```
 
-## 3. Configure the Starter
+For local development, install the starter to your local Maven cache:
 
-At minimum, configure the pieces your application uses.
+```bash
+cd rama-spring-starter
+mvn -DskipTests clean install
+```
 
-Example:
+## 2. Configuration
+
+### Minimal
 
 ```properties
-rama.storage.file-storage-location=s3
-rama.storage.minio-endpoint=http://localhost:9000
-rama.storage.minio-access-key=minioadmin
-rama.storage.minio-secret-key=minioadmin
-
-rama.document.gotenberg-server=http://localhost:3000
 rama.liquibase.enabled=true
+encrypt.key=your-32-char-aes-key
 ```
 
-Full example:
+### Full Reference
 
 ```yaml
+# Infrastructure config (original property prefixes - no rama. prefix needed)
+app:
+  file-storage-path: ./data          # Local fallback path (default: ./data)
+  file-storage-location: s3          # "s3" or "local" (default: s3)
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+
+document:
+  gotenberg-server: http://localhost:3000
+  placeholder-pattern: "\\{\\{(.+?)\\}\\}"
+  section-start-pattern: "..."
+  section-end-pattern: "..."
+  section-item-pattern: "..."
+  repeat-attribute-property: RepeatAttribute
+  maximum-pages-property: MaximumPages
+
+meilisearch:
+  host: http://localhost:7700
+  master-key: ""
+
+encrypt:
+  key: ""                            # AES encryption key for @Convert(Encrypt.class)
+
+# Starter feature flags (rama. prefix)
 rama:
-  starter:
-    storage:
-      file-storage-path: ./data
-      file-storage-location: s3
-      minio-endpoint: http://localhost:9000
-      minio-access-key: minioadmin
-      minio-secret-key: minioadmin
-    document:
-      gotenberg-server: http://localhost:3000
-      placeholder-pattern: "{{(.+?)}}"
-    static-values:
-      enabled: true
-      group-key: $StaticValue
-      current-username-fallback-key: AgentUpdateSystem
-      refresh-ttl: 5m
-    revision:
-      enabled: true
-    mongo:
-      enabled: false
-      deferred-indexes-enabled: true
-    meilisearch:
-      enabled: false
-      host-url: http://localhost:7700
-      api-key: ""
-      initialize-indexes: true
-    graphql:
-      enabled: true
-    liquibase:
-      enabled: true
+  jpa:
+    enabled: true                    # Enable JPA infrastructure (default: true)
+  static-values:
+    enabled: true                    # Enable MasterItem-backed static values
+    group-key: $StaticValue
+    current-username-fallback-key: AgentUpdateSystem
+    refresh-ttl: 5m                  # Cache TTL
+  revision:
+    enabled: true                    # Enable @TrackRevision listener
+  mongo:
+    enabled: false                   # Enable MongoDB sync
+    deferred-indexes-enabled: true   # Auto-create indexes on usage patterns
+  meilisearch:
+    enabled: false                   # Enable Meilisearch sync
+    initialize-indexes: true         # Create indexes on startup
+  graphql:
+    enabled: true                    # Enable GraphQL validation/scalar wiring
+  liquibase:
+    enabled: true                    # Run starter Liquibase migrations
 ```
 
-## 4. Use Optional Features
+## 3. Entity Pattern
 
-### Revision tracking
+Every JPA entity must implement `Auditable` and embed `UserstampField` + `TimestampField`:
 
-Enable revision support:
+```java
+@Entity
+@Data
+@NoArgsConstructor
+public class MyEntity implements Auditable {
+    @Id
+    @Column(updatable = false, nullable = false)
+    private String id;
+
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    private final StatusCode statusCode = StatusCode.active;
+
+    @Embedded
+    private final UserstampField userstampField = new UserstampField();
+
+    @Embedded
+    private final TimestampField timestampField = new TimestampField();
+}
+```
+
+## 4. Repository Pattern
+
+Extend `BaseRepository` (adds `refresh()`, `saveAndRefresh()`). Use `SoftDeleteRepository` for soft-delete with `withoutTerminated()`:
+
+```java
+@GraphQlRepository
+public interface MyEntityRepository extends BaseRepository<MyEntity, String>,
+        SoftDeleteRepository<MyEntity, String>,
+        QuerydslPredicateExecutor<MyEntity> {
+}
+```
+
+## 5. GraphQL Controller Pattern
+
+```java
+@Controller
+@RequiredArgsConstructor
+public class MyEntityController {
+    private final MyEntityRepository repository;
+
+    @MutationMapping
+    public Optional<MyEntity> createMyEntity(@Argument Map<String, Object> input) {
+        return GenericEntityService.createEntity(MyEntity.class, repository, input, "id");
+    }
+
+    @MutationMapping
+    public Optional<MyEntity> updateMyEntity(@Argument Map<String, Object> input) {
+        return GenericEntityService.updateEntity(MyEntity.class, repository, input, "id");
+    }
+}
+```
+
+## 6. Optional Features
+
+### Revision Tracking
 
 ```properties
 rama.revision.enabled=true
 ```
 
-Annotate your entity:
-
 ```java
-@TrackRevision({"statusCode", "name"})
-public class MyEntity {
-}
+@Entity
+@TrackRevision
+public class MyEntity implements Auditable { ... }
 ```
 
-### Mongo sync
-
-Enable Mongo support:
+### MongoDB Sync
 
 ```properties
 rama.mongo.enabled=true
 ```
 
-Annotate your entity:
+```java
+@Entity
+@SyncToMongo(mongoClass = MyMongoDoc.class, mapperClass = MyMongoMapper.class)
+public class MyEntity implements Auditable { ... }
+```
+
+Implement `IMongoMapper`:
 
 ```java
-@SyncToMongo(
-    mongoClass = MyMongoDocument.class,
-    mapperClass = MyMongoMapper.class
-)
-public class MyEntity {
+@Mapper
+public interface MyMongoMapper extends IMongoMapper<MyEntity, MyMongoDoc> {
+    MyMongoDoc map(MyEntity entity);
 }
 ```
 
-### Meilisearch sync
-
-Enable Meilisearch support:
+### Meilisearch Sync
 
 ```properties
 rama.meilisearch.enabled=true
 rama.meilisearch.host-url=http://localhost:7700
 ```
 
-Annotate your entity:
-
 ```java
-@SyncToMeilisearch(
-    indexName = "my_index",
-    searchableAttributes = {"name", "code"},
-    filterableAttributes = {"statusCode"}
-)
-public class MyEntity {
-}
+@Entity
+@SyncToMeilisearch(filterableAttributes = {"statusCode", "name"})
+public class MyEntity implements Auditable { ... }
 ```
 
-### GraphQL support
+### Document Template Processing
 
-Enable starter GraphQL wiring:
+The starter provides a full DOCX-to-PDF pipeline:
+
+1. `TemplatePreprocessor` -- converts Word form controls to placeholders
+2. `DocxTemplateProcessor` -- replaces `{{placeholder}}` with data
+3. `PdfService` -- converts DOCX to PDF via Gotenberg, merges, trims, watermarks
+
+Placeholder syntax: `{{key;attribute1="value1";attribute2="value2"}}`
+
+Built-in attributes: `image`, `qrcode`, `barcode39`, `barcode128`, `html`, `checkbox`, `datetime`, `date`, `time`, `master`, `join`, `prefix`, `suffix`, `if`, `else`, `ifempty`
+
+### Encryption
+
+`EncryptionUtil` provides AES/CBC encryption. Set the key:
 
 ```properties
-rama.graphql.enabled=true
+rama.encryption.key=your-32-char-aes-key
 ```
 
-## 5. Notes For Consumer Apps
+Use on entity fields:
 
-- if you want deferred Mongo index flush, enable scheduling in the app
-- if you want async revision/sync calls, enable async execution in the app
-- if your app needs real encryption, provide a `TextEncryptor` bean
-- if your app has its own current-user fallback logic, replace `StaticValueResolver`
-- if your app does not want part of the bundled stack, disable the starter feature by property or exclude the dependency explicitly at Maven level
+```java
+@Convert(converter = Encrypt.class)
+private String sensitiveField;
+
+@Convert(converter = JsonEncryptConverter.class)
+@Column(length = 4000)
+private Map<String, Object> encryptedJson;
+```
+
+## 7. Liquibase Migrations
+
+The starter manages its own tables via `rama-spring-starter-master.yaml`. Include it in your app's changelog:
+
+```yaml
+# db.changelog-master.yaml
+databaseChangeLog:
+  - include:
+      file: db/changelog/rama-spring-starter-master.yaml
+  - include:
+      file: db/changelog/your-app-tables.yaml
+```
+
+Starter-managed tables: `api`, `api_header_set`, `asset_file`, `master_group`, `master_id`, `master_item`, `revision`, `system_log`, `system_parameter`, `system_template`, `client_config`
