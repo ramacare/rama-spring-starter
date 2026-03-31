@@ -1,8 +1,6 @@
 package org.rama.autoconfigure;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Config;
 import graphql.scalars.ExtendedScalars;
@@ -116,9 +114,7 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     ObjectMapper ramaStarterObjectMapper() {
-        return new ObjectMapper()
-                .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        return org.rama.entity.JsonConverter.createObjectMapper();
     }
 
     @Bean

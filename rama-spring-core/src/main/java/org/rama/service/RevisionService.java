@@ -20,13 +20,16 @@ public class RevisionService {
 
     @Async
     public void saveRevision(String revisionKey, String revisionEntity, Map<String, Object> revisionData, Map<String, Object> revisionChange) {
+        if (revisionData == null || revisionData.isEmpty()) {
+            return;
+        }
         Revision revision = new Revision();
         revision.setRevisionKey(revisionKey);
         revision.setRevisionEntity(revisionEntity);
         revision.setRevisionDatetime(OffsetDateTime.now());
         revision.setRevisionData(revisionData);
         revision.setRevisionChange(revisionChange);
-        if (revisionData != null && revisionData.containsKey("mrn")) {
+        if (revisionData.containsKey("mrn")) {
             revision.setMrn(Objects.toString(revisionData.get("mrn"), null));
         }
         revisionRepository.save(revision);
