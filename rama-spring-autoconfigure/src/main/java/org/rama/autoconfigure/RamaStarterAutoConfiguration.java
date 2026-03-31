@@ -102,7 +102,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 
-@AutoConfiguration
+@AutoConfiguration(after = {
+        org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration.class
+})
 @EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class})
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
