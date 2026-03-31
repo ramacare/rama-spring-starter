@@ -87,6 +87,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
@@ -103,8 +104,8 @@ import java.time.ZoneOffset;
 import java.util.*;
 
 @AutoConfiguration(afterName = {
-        "org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration",
-        "org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration"
+        "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration",
+        "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
 })
 @EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class})
 public class RamaStarterAutoConfiguration {
@@ -401,19 +402,7 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnClass(MongoTemplate.class)
-    @ConditionalOnMissingBean
-    MongoCustomConversions mongoCustomConversions() {
-        return new MongoCustomConversions(Arrays.asList(
-                new OffsetDateTimeReadConverter(),
-                new OffsetDateTimeWriteConverter(),
-                new BigIntegerToDecimal128Converter(),
-                new Decimal128ToBigIntegerConverter()
-        ));
-    }
-
-    @Bean
-    @ConditionalOnClass(MongoTemplate.class)
-    @ConditionalOnBean(MongoTemplate.class)
+    @ConditionalOnBean(MongoDatabaseFactory.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.mongo", name = "enabled", havingValue = "true", matchIfMissing = true)
     DeferredIndexManager deferredIndexManager(MongoTemplate mongoTemplate) {
@@ -421,7 +410,7 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean({MongoTemplate.class, DeferredIndexManager.class})
+    @ConditionalOnBean({MongoDatabaseFactory.class, DeferredIndexManager.class})
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.mongo", name = "deferred-indexes-enabled", havingValue = "true", matchIfMissing = true)
     IndexAwareMongoTemplate ramaStarterIndexAwareMongoTemplate(MongoTemplate mongoTemplate, DeferredIndexManager deferredIndexManager) {
@@ -429,7 +418,7 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(MongoTemplate.class)
+    @ConditionalOnBean(MongoDatabaseFactory.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.mongo", name = "enabled", havingValue = "true", matchIfMissing = true)
     MongoSyncService mongoSyncService(ApplicationContext applicationContext, MongoTemplate mongoTemplate) {
@@ -437,7 +426,7 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(MongoTemplate.class)
+    @ConditionalOnBean(MongoDatabaseFactory.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.mongo", name = "enabled", havingValue = "true", matchIfMissing = true)
     GenericMongoService genericMongoService(MongoTemplate mongoTemplate) {
@@ -582,31 +571,4 @@ public class RamaStarterAutoConfiguration {
         return liquibase;
     }
 
-    static class OffsetDateTimeWriteConverter implements Converter<OffsetDateTime, Date> {
-        @Override
-        public Date convert(OffsetDateTime source) {
-            return Date.from(source.toInstant().atZone(ZoneOffset.UTC).toInstant());
-        }
-    }
-
-    static class OffsetDateTimeReadConverter implements Converter<Date, OffsetDateTime> {
-        @Override
-        public OffsetDateTime convert(Date source) {
-            return source.toInstant().atOffset(ZoneOffset.UTC);
-        }
-    }
-
-    static class BigIntegerToDecimal128Converter implements Converter<BigInteger, Decimal128> {
-        @Override
-        public Decimal128 convert(BigInteger source) {
-            return new Decimal128(new BigDecimal(source));
-        }
-    }
-
-    static class Decimal128ToBigIntegerConverter implements Converter<Decimal128, BigInteger> {
-        @Override
-        public BigInteger convert(Decimal128 source) {
-            return source.bigDecimalValue().toBigInteger();
-        }
-    }
 }
