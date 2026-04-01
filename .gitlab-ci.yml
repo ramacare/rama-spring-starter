@@ -1,6 +1,7 @@
 stages:
   - build
   - test
+  - deploy
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
@@ -41,3 +42,30 @@ maven_test:
     reports:
       junit:
         - "*/target/surefire-reports/TEST-*.xml"
+
+pages:
+  stage: deploy
+  script:
+    - VERSION=${CI_COMMIT_TAG#v}
+    - mvn $MAVEN_CLI_OPTS versions:set -DnewVersion=$VERSION -DgenerateBackupPoms=false
+    - mvn $MAVEN_CLI_OPTS deploy -DskipTests -Dmaven.javadoc.skip=true -DaltDeploymentRepository=staging::file://$(pwd)/staging
+    # Restore previous pages content (preserves old versions)
+    - mkdir -p public
+    - git fetch origin gl-pages && git archive origin/gl-pages | tar -x -C public || true
+    # Overlay new version artifacts
+    - cp -r staging/* public/
+    # Persist to gl-pages branch for next deployment
+    - cd public
+    - git init -b gl-pages
+    - git add .
+    - git -c user.name="CI" -c user.email="ci@gitlab" commit -m "Pages ${VERSION}"
+    - git push --force "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" gl-pages
+    - rm -rf .git
+    - cd ..
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+/'
+  tags:
+    - dkrunner-20-63-tag
