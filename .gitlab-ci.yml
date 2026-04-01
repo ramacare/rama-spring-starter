@@ -55,6 +55,8 @@ pages:
     - git fetch origin gl-pages && git archive origin/gl-pages | tar -x -C public || true
     # Overlay new version artifacts
     - cp -r staging/* public/
+    # Add index page
+    - echo '<html><body><h1>Rama Spring Starter Maven Repository</h1></body></html>' > public/index.html
     # Persist to gl-pages branch for next deployment
     - cd public
     - git init -b gl-pages
