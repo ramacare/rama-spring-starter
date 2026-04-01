@@ -50,10 +50,28 @@ Every JPA entity implements `Auditable` and embeds `UserstampField` + `Timestamp
 All repositories extend `BaseRepository<T, ID>`. Add `SoftDeleteRepository` for soft-delete with `withoutTerminated()`. Add `QuerydslPredicateExecutor` for filtering.
 
 ### Auto-Configuration
-Most beans are registered with `@ConditionalOnMissingBean`. Consumer applications can override any starter bean. Feature flags: `rama.jpa.enabled`, `rama.mongo.enabled`, `rama.meilisearch.enabled`, `rama.revision.enabled`, `rama.graphql.enabled`.
+Most beans are registered with `@ConditionalOnMissingBean`. Consumer applications can override any starter bean.
+
+**Feature flags** (all prefixed with `rama.`, default `true`):
+- `rama.jpa.enabled` -- JPA entity scanning
+- `rama.static-values.enabled` -- Static value resolver
+- `rama.revision.enabled` -- Revision/audit trail
+- `rama.mongo.enabled` -- MongoDB sync
+- `rama.mongo.deferred-indexes-enabled` -- MongoDB deferred index creation
+- `rama.meilisearch.enabled` -- Meilisearch sync
+- `rama.meilisearch.initialize-indexes` -- Meilisearch index auto-initialization
+- `rama.graphql.enabled` -- GraphQL scalars and directives
+- `rama.liquibase.enabled` -- Starter Liquibase migrations
+
+**Connection/service properties** (no `rama.` prefix):
+- `meilisearch.host`, `meilisearch.master-key` -- Meilisearch connection
+- `minio.endpoint`, `minio.access-key`, `minio.secret-key` -- MinIO connection
+- `encrypt.key` -- AES encryption key
+- `document.*` -- Document processing (Gotenberg server, patterns)
+- `app.file-storage-path`, `app.file-storage-location` -- File storage config
 
 ### Encryption
-`EncryptionUtil` provides AES/CBC encryption. Used directly by `Encrypt` and `JsonEncryptConverter` JPA converters. Key set via `rama.encryption.key` property.
+`EncryptionUtil` provides AES/CBC encryption. Used directly by `Encrypt` and `JsonEncryptConverter` JPA converters. Key set via `encrypt.key` property.
 
 ## Code Patterns
 

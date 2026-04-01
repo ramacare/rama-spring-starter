@@ -13,6 +13,7 @@ public class RamaStarterProperties {
     private final StaticValues staticValues = new StaticValues();
     private final Revision revision = new Revision();
     private final Mongo mongo = new Mongo();
+    private final Meilisearch meilisearch = new Meilisearch();
     private final Graphql graphql = new Graphql();
 
     @Data
@@ -37,6 +38,12 @@ public class RamaStarterProperties {
     public static class Mongo {
         private boolean enabled = true;
         private boolean deferredIndexesEnabled = true;
+    }
+
+    @Data
+    public static class Meilisearch {
+        private boolean enabled = true;
+        private boolean initializeIndexes = true;
     }
 
     @Data
