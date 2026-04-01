@@ -58,7 +58,7 @@ pages:
     - cd public
     - git init -b gl-pages
     - git add .
-    - git -c user.name="CI" -c user.email="ci@gitlab" commit -m "Pages ${VERSION}"
+    - git -c user.name="CI" -c user.email="ci@gitlab" commit -m "chore: publish ${VERSION} to GitLab Pages"
     - git push --force "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" gl-pages
     - rm -rf .git
     - cd ..
