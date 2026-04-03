@@ -1,6 +1,7 @@
 package org.rama.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.rama.entity.api.Api;
 import org.rama.entity.api.ApiHeaderSet;
@@ -24,6 +25,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@Slf4j
 public class GenericApiService {
     private final ApiRepository apiRepository;
     private final ApiHeaderSetRepository apiHeaderSetRepository;
@@ -58,6 +60,7 @@ public class GenericApiService {
                     .method(method)
                     .uri(UriComponentsBuilder.fromUriString(uri).build(true).toUri())
                     .contentType(contentType)
+                    .accept(MediaType.APPLICATION_JSON)
                     .headers(httpHeaders -> {
                         if (!finalHeaders.isEmpty()) {
                             finalHeaders.forEach((key, value) -> {
@@ -76,8 +79,14 @@ public class GenericApiService {
                     .toEntity(returnType)
                     .block();
 
-            return response != null && response.hasBody() ? Optional.ofNullable(response.getBody()) : Optional.empty();
+            if (response != null && response.hasBody()) {
+                log.debug("API [{}] called successfully", apiId);
+                return Optional.ofNullable(response.getBody());
+            }
+            return Optional.empty();
         } catch (Exception ex) {
+            log.error("API [{}] failed. requestBody={}, exceptionType={}, message={}",
+                    apiId, requestBody, ex.getClass().getName(), ex.getMessage());
             if (!throwError && ex instanceof WebClientResponseException responseException) {
                 try {
                     T entity = responseException.getResponseBodyAs(returnType);

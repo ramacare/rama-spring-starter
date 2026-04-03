@@ -9,7 +9,6 @@ import graphql.validation.rules.ValidationRules;
 import graphql.validation.schemawiring.ValidationSchemaWiring;
 import io.minio.MinioClient;
 import liquibase.integration.spring.SpringLiquibase;
-import org.bson.types.Decimal128;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.spi.BootstrapContext;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -86,10 +85,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.ConversionService;
-import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
@@ -97,11 +94,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.json.JsonMapper;
 
 import javax.sql.DataSource;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 @AutoConfiguration(afterName = {
         "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration",
@@ -132,7 +127,12 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnMissingBean
     WebClient.Builder ramaStarterWebClientBuilder() {
         return WebClient.builder().exchangeStrategies(ExchangeStrategies.builder()
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(5 * 1024 * 1024))
+                .codecs(configurer -> {
+                    configurer.defaultCodecs().maxInMemorySize(5 * 1024 * 1024);
+                    configurer.customCodecs().register(
+                            new org.springframework.http.codec.xml.JacksonXmlDecoder()
+                    );
+                })
                 .build());
     }
 
