@@ -42,7 +42,7 @@ databaseChangeLog:
         columns:
         - column:
             name: group_key
-            type: VARCHAR(255)
+            type: VARCHAR(50)
             constraints:
               primaryKey: true
               primaryKeyName: master_group_groupKey
