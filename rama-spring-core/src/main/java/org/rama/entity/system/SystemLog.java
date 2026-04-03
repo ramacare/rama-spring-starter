@@ -3,6 +3,7 @@ package org.rama.entity.system;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Nationalized;
 import org.rama.entity.Auditable;
 import org.rama.entity.JsonConverter;
 import org.rama.entity.TimestampField;
@@ -28,6 +29,7 @@ public class SystemLog implements Auditable {
     private String logKey;
     private String message;
 
+    @Nationalized
     @Convert(converter = JsonConverter.class)
     @Column(length = 4000)
     private Map<String, Object> detail;

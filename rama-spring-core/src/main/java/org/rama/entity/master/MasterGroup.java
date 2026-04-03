@@ -3,6 +3,7 @@ package org.rama.entity.master;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Nationalized;
 import org.rama.entity.*;
 
 import java.util.List;
@@ -16,8 +17,10 @@ public class MasterGroup implements Auditable {
     private String groupKey;
     private String groupName;
     private String description;
+    @Nationalized
     private String propertiesTemplate;
 
+    @Nationalized
     @Convert(converter = JsonConverter.class)
     @Column(length = 4000)
     private Map<String, Object> defaultProperties;
