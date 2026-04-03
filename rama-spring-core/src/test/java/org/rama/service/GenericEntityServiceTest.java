@@ -1,7 +1,6 @@
 package org.rama.service;
 
 import graphql.GraphQLException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,12 +35,7 @@ class GenericEntityServiceTest {
     @Captor
     private ArgumentCaptor<MasterItem> entityCaptor;
 
-    @BeforeEach
-    void setup() {
-        // Initialize the static JsonMapper used by GenericEntityService
-        JsonMapper mapper = JsonMapper.builder().build();
-        new GenericEntityService(mapper);
-    }
+    private final GenericEntityService genericEntityService = new GenericEntityService(JsonMapper.builder().build());
 
     @Test
     void createEntity_shouldCreateAndSave() {
@@ -58,7 +52,7 @@ class GenericEntityServiceTest {
         doNothing().when(masterItemRepository).refresh(any(MasterItem.class));
 
         // Act
-        Optional<MasterItem> result = GenericEntityService.createEntity(
+        Optional<MasterItem> result = genericEntityService.createEntity(
                 MasterItem.class, masterItemRepository, input, "id"
         );
 
@@ -79,7 +73,7 @@ class GenericEntityServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() ->
-                GenericEntityService.createEntity(MasterItem.class, masterItemRepository, input, "id")
+                genericEntityService.createEntity(MasterItem.class, masterItemRepository, input, "id")
         ).isInstanceOf(GraphQLException.class);
         verify(masterItemRepository, never()).save(any());
     }
@@ -100,7 +94,7 @@ class GenericEntityServiceTest {
         doNothing().when(masterItemRepository).refresh(any(MasterItem.class));
 
         // Act
-        Optional<MasterItem> result = GenericEntityService.updateEntity(
+        Optional<MasterItem> result = genericEntityService.updateEntity(
                 MasterItem.class, masterItemRepository, input, "id"
         );
 
@@ -119,7 +113,7 @@ class GenericEntityServiceTest {
         when(masterItemRepository.findById("NONEXISTENT")).thenReturn(Optional.empty());
 
         // Act
-        Optional<MasterItem> result = GenericEntityService.updateEntity(
+        Optional<MasterItem> result = genericEntityService.updateEntity(
                 MasterItem.class, masterItemRepository, input, "id"
         );
 
@@ -142,7 +136,7 @@ class GenericEntityServiceTest {
         when(masterItemRepository.save(any(MasterItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        Optional<MasterItem> result = GenericEntityService.softDeleteEntity(
+        Optional<MasterItem> result = genericEntityService.softDeleteEntity(
                 MasterItem.class, masterItemRepository, input, "id"
         );
 
@@ -163,7 +157,7 @@ class GenericEntityServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() ->
-                GenericEntityService.softDeleteEntity(MasterItem.class, masterItemRepository, input, "id")
+                genericEntityService.softDeleteEntity(MasterItem.class, masterItemRepository, input, "id")
         ).isInstanceOf(GraphQLException.class)
                 .hasMessageContaining("Entity not found");
     }
@@ -186,7 +180,7 @@ class GenericEntityServiceTest {
         doNothing().when(masterItemRepository).refresh(any(MasterItem.class));
 
         // Act
-        Optional<MasterItem> result = GenericEntityService.createEntity(
+        Optional<MasterItem> result = genericEntityService.createEntity(
                 MasterItem.class, masterItemRepository, wrappedInput, "id"
         );
 

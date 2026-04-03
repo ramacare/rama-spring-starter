@@ -20,21 +20,22 @@ import java.util.Optional;
 @Controller
 @RequiredArgsConstructor
 public class SystemTemplateController {
+    private final GenericEntityService genericEntityService;
     private final SystemTemplateRepository systemTemplateRepository;
 
     @MutationMapping(name = "createSystemTemplate")
     public Optional<SystemTemplate> createEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.createEntity(SystemTemplate.class, systemTemplateRepository, input, "id");
+        return genericEntityService.createEntity(SystemTemplate.class, systemTemplateRepository, input, "id");
     }
 
     @MutationMapping(name = "updateSystemTemplate")
     public Optional<SystemTemplate> updateEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.updateEntity(SystemTemplate.class, systemTemplateRepository, input, "id");
+        return genericEntityService.updateEntity(SystemTemplate.class, systemTemplateRepository, input, "id");
     }
 
     @MutationMapping(name = "deleteSystemTemplate")
     public Optional<SystemTemplate> deleteEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.softDeleteEntity(SystemTemplate.class, systemTemplateRepository, input, "id");
+        return genericEntityService.softDeleteEntity(SystemTemplate.class, systemTemplateRepository, input, "id");
     }
 
     @QueryMapping

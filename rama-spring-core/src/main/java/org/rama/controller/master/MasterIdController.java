@@ -19,6 +19,7 @@ import java.util.Optional;
 @Controller
 @RequiredArgsConstructor
 public class MasterIdController {
+    private final GenericEntityService genericEntityService;
     private final MasterIdRepository masterIdRepository;
 
     @QueryMapping
@@ -44,11 +45,11 @@ public class MasterIdController {
             input.put("runningNumber", 0);
         }
 
-        return GenericEntityService.createEntity(MasterId.class, masterIdRepository, input, "id");
+        return genericEntityService.createEntity(MasterId.class, masterIdRepository, input, "id");
     }
 
     @MutationMapping
     public Optional<MasterId> updateMasterId(@Argument Map<String, Object> input) {
-        return GenericEntityService.updateEntity(MasterId.class, masterIdRepository, input, "id");
+        return genericEntityService.updateEntity(MasterId.class, masterIdRepository, input, "id");
     }
 }

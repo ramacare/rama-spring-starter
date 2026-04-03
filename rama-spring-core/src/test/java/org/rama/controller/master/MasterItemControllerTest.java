@@ -11,8 +11,10 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.rama.entity.master.MasterItem;
 import org.rama.repository.master.MasterItemRepository;
+import org.rama.service.GenericEntityService;
 import org.rama.service.GenericMongoService;
 import org.springframework.beans.factory.ObjectProvider;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Optional;
@@ -39,7 +41,8 @@ class MasterItemControllerTest {
 
     @BeforeEach
     void setup() {
-        masterItemController = new MasterItemController(masterItemRepository, queryFactory, genericMongoServiceProvider);
+        GenericEntityService genericEntityService = new GenericEntityService(JsonMapper.builder().build());
+        masterItemController = new MasterItemController(genericEntityService, masterItemRepository, queryFactory, genericMongoServiceProvider);
     }
 
     @Test

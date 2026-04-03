@@ -21,22 +21,23 @@ import java.util.Optional;
 @Controller
 @RequiredArgsConstructor
 public class ClientConfigController {
+    private final GenericEntityService genericEntityService;
     private final ClientConfigRepository clientConfigRepository;
     private final ClientConfigService clientConfigService;
 
     @MutationMapping(name = "createClientConfig")
     public Optional<ClientConfig> createEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.createEntity(ClientConfig.class, clientConfigRepository, input,"id");
+        return genericEntityService.createEntity(ClientConfig.class, clientConfigRepository, input,"id");
     }
 
     @MutationMapping(name = "updateClientConfig")
     public Optional<ClientConfig> updateEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.updateEntity(ClientConfig.class, clientConfigRepository, input,"id");
+        return genericEntityService.updateEntity(ClientConfig.class, clientConfigRepository, input,"id");
     }
 
     @MutationMapping(name = "deleteClientConfig")
     public Optional<ClientConfig> deleteEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.hardDeleteEntity(ClientConfig.class,clientConfigRepository,input,"id");
+        return genericEntityService.hardDeleteEntity(ClientConfig.class,clientConfigRepository,input,"id");
     }
 
     @QueryMapping(name = "clientConfigByComputerNameAndFingerprint")

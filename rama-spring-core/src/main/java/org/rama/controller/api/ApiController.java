@@ -22,17 +22,18 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class ApiController {
+    private final GenericEntityService genericEntityService;
     private final ApiRepository apiRepository;
     private final JsonMapper jsonMapper;
 
     @MutationMapping(name = "createApi")
     public Optional<Api> createEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.createEntity(Api.class, apiRepository, input, "id");
+        return genericEntityService.createEntity(Api.class, apiRepository, input, "id");
     }
 
     @MutationMapping(name = "updateApi")
     public Optional<Api> updateEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.updateEntity(Api.class, apiRepository, input, "id");
+        return genericEntityService.updateEntity(Api.class, apiRepository, input, "id");
     }
 
     @QueryMapping

@@ -28,23 +28,24 @@ import java.util.stream.StreamSupport;
 @Controller
 @RequiredArgsConstructor
 public class MasterItemController {
+	private final GenericEntityService genericEntityService;
 	private final MasterItemRepository masterItemRepository;
 	private final JPAQueryFactory queryFactory;
 	private final ObjectProvider<GenericMongoService> genericMongoServiceProvider;
 
 	@MutationMapping(name = "createMasterItem")
 	public Optional<MasterItem> createEntity(@Argument Map<String, Object> input) {
-		return GenericEntityService.createEntity(MasterItem.class, masterItemRepository, input, "id");
+		return genericEntityService.createEntity(MasterItem.class, masterItemRepository, input, "id");
 	}
 
 	@MutationMapping(name = "updateMasterItem")
 	public Optional<MasterItem> updateEntity(@Argument Map<String, Object> input) {
-		return GenericEntityService.updateEntity(MasterItem.class, masterItemRepository, input,"id");
+		return genericEntityService.updateEntity(MasterItem.class, masterItemRepository, input,"id");
 	}
 
 	@MutationMapping(name = "deleteMasterItem")
 	public Optional<MasterItem> deleteEntity(@Argument Map<String, Object> input) {
-		return GenericEntityService.softDeleteEntity(MasterItem.class,masterItemRepository,input,"id");
+		return genericEntityService.softDeleteEntity(MasterItem.class,masterItemRepository,input,"id");
 	}
 
 	@QueryMapping

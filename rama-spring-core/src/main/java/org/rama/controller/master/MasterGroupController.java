@@ -25,23 +25,24 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class MasterGroupController {
+	private final GenericEntityService genericEntityService;
 	private final MasterGroupRepository masterGroupRepository;
 	private final MasterItemRepository masterItemRepository;
 
 	//@PreAuthorize("hasRole('ADMIN')")
 	@MutationMapping(name="createMasterGroup")
 	public Optional<MasterGroup> createEntity(@Argument Map<String,Object> input) {
-		return GenericEntityService.createEntity(MasterGroup.class,masterGroupRepository,input,"groupKey");
+		return genericEntityService.createEntity(MasterGroup.class,masterGroupRepository,input,"groupKey");
 	}
 
 	@MutationMapping(name="updateMasterGroup")
 	public Optional<MasterGroup> updateEntity(@Argument Map<String,Object> input) {
-		return GenericEntityService.updateEntity(MasterGroup.class,masterGroupRepository,input,"groupKey");
+		return genericEntityService.updateEntity(MasterGroup.class,masterGroupRepository,input,"groupKey");
 	}
 
 	@MutationMapping(name = "deleteMasterGroup")
 	public Optional<MasterGroup> deleteEntity(@Argument Map<String, Object> input) {
-		return GenericEntityService.softDeleteEntity(MasterGroup.class,masterGroupRepository,input,"groupKey");
+		return genericEntityService.softDeleteEntity(MasterGroup.class,masterGroupRepository,input,"groupKey");
 	}
 
 	@QueryMapping

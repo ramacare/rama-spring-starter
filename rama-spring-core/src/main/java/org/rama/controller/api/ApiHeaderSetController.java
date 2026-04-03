@@ -17,16 +17,17 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class ApiHeaderSetController {
+    private final GenericEntityService genericEntityService;
     private final ApiHeaderSetRepository apiHeaderSetRepository;
 
     @MutationMapping(name = "createApiHeaderSet")
     public Optional<ApiHeaderSet> createEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.createEntity(ApiHeaderSet.class, apiHeaderSetRepository, input, "id");
+        return genericEntityService.createEntity(ApiHeaderSet.class, apiHeaderSetRepository, input, "id");
     }
 
     @MutationMapping(name = "updateApiHeaderSet")
     public Optional<ApiHeaderSet> updateEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.updateEntity(ApiHeaderSet.class, apiHeaderSetRepository, input, "id");
+        return genericEntityService.updateEntity(ApiHeaderSet.class, apiHeaderSetRepository, input, "id");
     }
 
     @QueryMapping

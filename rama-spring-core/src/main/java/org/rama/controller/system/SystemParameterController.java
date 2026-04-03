@@ -17,16 +17,17 @@ import java.util.Optional;
 @Controller
 @RequiredArgsConstructor
 public class SystemParameterController {
+    private final GenericEntityService genericEntityService;
     private final SystemParameterRepository systemParameterRepository;
 
     @MutationMapping(name = "createSystemParameter")
     public Optional<SystemParameter> createEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.createEntity(SystemParameter.class, systemParameterRepository, input, "parameterKey");
+        return genericEntityService.createEntity(SystemParameter.class, systemParameterRepository, input, "parameterKey");
     }
 
     @MutationMapping(name = "updateSystemParameter")
     public Optional<SystemParameter> updateEntity(@Argument Map<String, Object> input) {
-        return GenericEntityService.updateEntity(SystemParameter.class, systemParameterRepository, input,"parameterKey");
+        return genericEntityService.updateEntity(SystemParameter.class, systemParameterRepository, input,"parameterKey");
     }
 
     @QueryMapping

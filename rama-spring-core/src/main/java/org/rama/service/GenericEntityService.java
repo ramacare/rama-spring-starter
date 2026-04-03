@@ -8,6 +8,7 @@ import com.querydsl.core.types.dsl.PathBuilder;
 import com.querydsl.core.types.dsl.Wildcard;
 import com.querydsl.jpa.impl.JPAQuery;
 import graphql.GraphQLException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.rama.entity.*;
@@ -29,14 +30,11 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings({"unchecked"})
 @Slf4j
+@RequiredArgsConstructor
 public class GenericEntityService {
-    static JsonMapper mapper;
+    private final JsonMapper mapper;
 
-    public GenericEntityService(JsonMapper mapper) {
-        GenericEntityService.mapper = mapper;
-    }
-
-    public static <T, ID extends Serializable> Optional<T> createEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
+    public <T, ID extends Serializable> Optional<T> createEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
         T entity;
         try {
             if (entityId != null && entityRepository.existsById(entityId)) {
@@ -64,11 +62,11 @@ public class GenericEntityService {
         return Optional.of(entity);
     }
 
-    public static <T, ID extends Serializable> Optional<T> createEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
+    public <T, ID extends Serializable> Optional<T> createEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return createEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey, true), entityInput);
     }
 
-    public static <T, ID extends Serializable> Optional<T> updateEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
+    public <T, ID extends Serializable> Optional<T> updateEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
         Optional<T> entity = entityRepository.findById(entityId);
         T updatedEntity = null;
         if (entity.isPresent()) {
@@ -122,31 +120,31 @@ public class GenericEntityService {
         return Optional.ofNullable(updatedEntity);
     }
 
-    public static <T, ID extends Serializable> Optional<T> updateEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
+    public <T, ID extends Serializable> Optional<T> updateEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return updateEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey), entityInput);
     }
 
-    public static <T, ID extends Serializable> Optional<T> softDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
+    public <T, ID extends Serializable> Optional<T> softDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return softDeleteEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey));
     }
 
-    public static <T, ID extends Serializable> Optional<T> softDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId) {
+    public <T, ID extends Serializable> Optional<T> softDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId) {
         return deleteEntity(entityClass, entityRepository, entityId, "statusCode", StatusCode.terminated);
     }
 
-    public static <T, ID extends Serializable> Optional<T> hardDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
+    public <T, ID extends Serializable> Optional<T> hardDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return hardDeleteEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey));
     }
 
-    public static <T, ID extends Serializable> Optional<T> hardDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId) {
+    public <T, ID extends Serializable> Optional<T> hardDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId) {
         return deleteEntity(entityClass, entityRepository, entityId, null, null);
     }
 
-    public static <T, ID extends Serializable> Optional<T> deleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey, String statusCodeField, Object deleteValue) {
+    public <T, ID extends Serializable> Optional<T> deleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey, String statusCodeField, Object deleteValue) {
         return deleteEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey), statusCodeField, deleteValue);
     }
 
-    public static <T, ID extends Serializable> Optional<T> deleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, String statusCodeField, Object deleteValue) {
+    public <T, ID extends Serializable> Optional<T> deleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, String statusCodeField, Object deleteValue) {
         Optional<T> entityOptional = entityRepository.findById(entityId);
 
         if (entityOptional.isEmpty()) {
@@ -181,11 +179,11 @@ public class GenericEntityService {
         }
     }
 
-    private static <ID extends Serializable> ID extractEntityKey(Map<String, Object> entityInput, String entityIdKey) {
+    private <ID extends Serializable> ID extractEntityKey(Map<String, Object> entityInput, String entityIdKey) {
         return extractEntityKey(entityInput, entityIdKey, false);
     }
 
-    private static <ID extends Serializable> ID extractEntityKey(Map<String, Object> entityInput, String entityIdKey, Boolean nullable) {
+    private <ID extends Serializable> ID extractEntityKey(Map<String, Object> entityInput, String entityIdKey, Boolean nullable) {
         ID entityId = null;
         try {
             if (entityInput.containsKey("input")) {
