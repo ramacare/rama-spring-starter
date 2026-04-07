@@ -1,6 +1,5 @@
 package org.rama.util;
 
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.crypto.BadPaddingException;
@@ -23,7 +22,6 @@ public final class EncryptionUtil {
     private static final String CIPHER_TRANSFORMATION = "AES/CBC/PKCS5Padding";
     private static final int KEY_SIZE = 16;
     private static final int IV_SIZE = 16;
-    @Getter
     private static volatile String key;
 
     private EncryptionUtil() {
@@ -42,6 +40,7 @@ public final class EncryptionUtil {
             return null;
         }
         if (!isConfigured()) {
+            log.warn("Encryption key is not configured. Data will be stored in PLAINTEXT. Set 'encrypt.key' property to enable encryption.");
             return value;
         }
         try {
@@ -57,6 +56,7 @@ public final class EncryptionUtil {
             return null;
         }
         if (!isConfigured()) {
+            log.warn("Encryption key is not configured. Returning data as-is without decryption. Set 'encrypt.key' property to enable encryption.");
             return encrypted;
         }
         try {

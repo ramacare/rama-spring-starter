@@ -1,0 +1,102 @@
+---
+databaseChangeLog:
+- property:
+    name: clobType
+    value: clob
+- property:
+    name: clobType
+    value: "nvarchar(max)"
+    dbms: mssql
+- property:
+    name: clobType
+    value: longtext
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: timestamp
+- property:
+    name: timestampType
+    value: "datetime2(3)"
+    dbms: mssql
+- property:
+    name: timestampType
+    value: "datetime(3)"
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: "timestamp(3)"
+    dbms: postgresql
+- changeSet:
+    id: rama-spring-security-001-api-key
+    author: rama-spring-starter
+    preConditions:
+    - onFail: MARK_RAN
+    - not:
+        tableExists:
+          tableName: api_key
+    changes:
+    - createTable:
+        tableName: api_key
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: name
+            type: VARCHAR(100)
+        - column:
+            name: key_hash
+            type: VARCHAR(64)
+            constraints:
+              nullable: false
+        - column:
+            name: username
+            type: VARCHAR(150)
+            constraints:
+              nullable: false
+        - column:
+            name: roles
+            type: "${clobType}"
+        - column:
+            name: enabled
+            type: BOOLEAN
+            constraints:
+              nullable: false
+        - column:
+            name: expires_at
+            type: "${timestampType}"
+        - column:
+            name: last_used_at
+            type: "${timestampType}"
+        - column:
+            name: created_by
+            type: VARCHAR(100)
+        - column:
+            name: updated_by
+            type: VARCHAR(100)
+        - column:
+            name: created_at
+            type: "${timestampType}"
+        - column:
+            name: updated_at
+            type: "${timestampType}"
+    - addUniqueConstraint:
+        tableName: api_key
+        columnNames: key_hash
+        constraintName: uk_api_key__key_hash
+    - createIndex:
+        tableName: api_key
+        indexName: ix_api_key__username
+        columns:
+        - column:
+            name: username
+    - createIndex:
+        tableName: api_key
+        indexName: ix_api_key__enabled
+        columns:
+        - column:
+            name: enabled
