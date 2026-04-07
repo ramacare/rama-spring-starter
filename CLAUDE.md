@@ -49,6 +49,15 @@ Every JPA entity implements `Auditable` and embeds `UserstampField` + `Timestamp
 ### Repository Pattern
 All repositories extend `BaseRepository<T, ID>`. Add `SoftDeleteRepository` for soft-delete with `withoutTerminated()`. Add `QuerydslPredicateExecutor` for filtering.
 
+### Global Hibernate Listener Pattern
+All global Hibernate event listeners (revision, mongo sync, meilisearch) follow the same pattern:
+- **Listener** handles `TransactionSynchronization.afterCommit` directly (not the service)
+- **Listener** extracts data from the Hibernate event, then calls the service's `@Async @Transactional` method through the Spring proxy
+- **Service** provides data extraction helpers and the `@Async @Transactional` save/sync method
+- `requiresPostCommitHandling()` returns `false` — the listener manages post-commit via Spring's `TransactionSynchronizationManager`
+
+This avoids self-invocation in the service (calling `this.method()` bypasses the CGLIB proxy, so `@Async` and `@Transactional` would not activate).
+
 ### Auto-Configuration
 Most beans are registered with `@ConditionalOnMissingBean`. Consumer applications can override any starter bean.
 
