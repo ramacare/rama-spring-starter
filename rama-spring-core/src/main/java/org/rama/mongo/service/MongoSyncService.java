@@ -15,10 +15,12 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MongoSyncService {
     private final ApplicationContext context;
     private final MongoTemplate mongoTemplate;
+    private final ConcurrentHashMap<Class<?>, SyncMetadata> metadataCache = new ConcurrentHashMap<>();
 
     public MongoSyncService(ApplicationContext context, MongoTemplate mongoTemplate) {
         this.context = context;
@@ -29,15 +31,9 @@ public class MongoSyncService {
     @SuppressWarnings("unchecked")
     public void sync(Object entity) {
         Class<?> entityClass = entity.getClass();
-        if (!entityClass.isAnnotationPresent(SyncToMongo.class)) {
-            throw new IllegalArgumentException("Missing @SyncToMongo on " + entityClass.getName());
-        }
+        SyncMetadata metadata = metadataCache.computeIfAbsent(entityClass, this::buildMetadata);
 
-        SyncToMongo syncMeta = entityClass.getAnnotation(SyncToMongo.class);
-        Class<?> documentClass = syncMeta.mongoClass();
-        IMongoMapper<Object, Object> mapper = (IMongoMapper<Object, Object>) context.getBean(syncMeta.mapperClass());
-
-        Field idField = findIdField(entityClass);
+        Field idField = metadata.idField;
         idField.setAccessible(true);
         Object id;
         try {
@@ -46,9 +42,11 @@ public class MongoSyncService {
             throw new RuntimeException("Cannot access ID field", ex);
         }
 
+        IMongoMapper<Object, Object> mapper = (IMongoMapper<Object, Object>) context.getBean(metadata.mapperClass);
+
         Object mongoDoc = "id".equalsIgnoreCase(idField.getName())
-                ? mongoTemplate.findById(id, documentClass)
-                : mongoTemplate.find(new Query(Criteria.where(idField.getName()).is(id)), documentClass)
+                ? mongoTemplate.findById(id, metadata.documentClass)
+                : mongoTemplate.find(new Query(Criteria.where(idField.getName()).is(id)), metadata.documentClass)
                 .stream()
                 .findFirst()
                 .orElse(null);
@@ -59,8 +57,18 @@ public class MongoSyncService {
             mongoDoc = mapper.newMongoEntity(entity);
         }
 
-        applyDateTransform(mongoDoc);
+        applyDateTransform(mongoDoc, metadata.transformableFields);
         mongoTemplate.save(mongoDoc);
+    }
+
+    private SyncMetadata buildMetadata(Class<?> entityClass) {
+        if (!entityClass.isAnnotationPresent(SyncToMongo.class)) {
+            throw new IllegalArgumentException("Missing @SyncToMongo on " + entityClass.getName());
+        }
+        SyncToMongo syncMeta = entityClass.getAnnotation(SyncToMongo.class);
+        Field idField = findIdField(entityClass);
+        List<Field> transformableFields = findTransformableFields(syncMeta.mongoClass());
+        return new SyncMetadata(syncMeta.mongoClass(), syncMeta.mapperClass(), idField, transformableFields);
     }
 
     private Field findIdField(Class<?> clazz) {
@@ -68,6 +76,7 @@ public class MongoSyncService {
         while (current != null && current != Object.class) {
             for (Field field : current.getDeclaredFields()) {
                 if (field.isAnnotationPresent(Id.class)) {
+                    field.setAccessible(true);
                     return field;
                 }
             }
@@ -76,10 +85,9 @@ public class MongoSyncService {
         throw new IllegalStateException("No @Id field found");
     }
 
-    @SuppressWarnings("unchecked")
-    private void applyDateTransform(Object doc) {
+    private List<Field> findTransformableFields(Class<?> docClass) {
         List<Field> fields = new ArrayList<>();
-        Class<?> clazz = doc.getClass();
+        Class<?> clazz = docClass;
         while (clazz != null && clazz != Object.class) {
             for (Field field : clazz.getDeclaredFields()) {
                 if (field.isAnnotationPresent(TransformableMap.class) && Map.class.isAssignableFrom(field.getType())) {
@@ -89,7 +97,12 @@ public class MongoSyncService {
             }
             clazz = clazz.getSuperclass();
         }
-        for (Field field : fields) {
+        return fields;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyDateTransform(Object doc, List<Field> transformableFields) {
+        for (Field field : transformableFields) {
             try {
                 Map<String, Object> map = (Map<String, Object>) field.get(doc);
                 if (map != null) {
@@ -100,4 +113,6 @@ public class MongoSyncService {
             }
         }
     }
+
+    private record SyncMetadata(Class<?> documentClass, Class<?> mapperClass, Field idField, List<Field> transformableFields) {}
 }

@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class DocxTemplateProcessor implements TemplateProcessor {
     private static final Logger log = LoggerFactory.getLogger(DocxTemplateProcessor.class);
-    private final String placeholderPattern;
+    private final Pattern compiledPattern;
     private final String repeatAttributeProperty;
     private final String maximumPagesProperty;
 
@@ -47,7 +47,7 @@ public class DocxTemplateProcessor implements TemplateProcessor {
             ReplacePlaceholder replacePlaceholder,
             ReplaceSection replaceSection
     ) {
-        this.placeholderPattern = placeholderPattern;
+        this.compiledPattern = Pattern.compile(placeholderPattern);
         this.repeatAttributeProperty = repeatAttributeProperty;
         this.maximumPagesProperty = maximumPagesProperty;
         this.barcodeService = barcodeService;
@@ -137,7 +137,7 @@ public class DocxTemplateProcessor implements TemplateProcessor {
     }
 
     private void processDocument(XWPFDocument document, Map<String, Object> replacements) {
-        Pattern pattern = Pattern.compile(placeholderPattern);
+        Pattern pattern = compiledPattern;
 
         replacePatternInBody(document, pattern, replacements);
 

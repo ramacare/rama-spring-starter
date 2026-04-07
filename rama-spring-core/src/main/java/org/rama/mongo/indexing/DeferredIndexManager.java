@@ -18,7 +18,7 @@ public class DeferredIndexManager {
     private static final int INDEX_TRIGGER_THRESHOLD = 100;
 
     private final Map<String, Set<LinkedHashMap<String, Sort.Direction>>> indexPools = new ConcurrentHashMap<>();
-    private final Map<String, Map<LinkedHashMap<String, Sort.Direction>, Integer>> fieldUsageMap = new ConcurrentHashMap<>();
+    private final Map<String, ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer>> fieldUsageMap = new ConcurrentHashMap<>();
     private final MongoTemplate mongoTemplate;
 
     public DeferredIndexManager(MongoTemplate mongoTemplate) {
@@ -29,15 +29,19 @@ public class DeferredIndexManager {
         if (fields == null || fields.isEmpty()) {
             return;
         }
-        indexPools.computeIfAbsent(collectionName, key -> new HashSet<>()).add(new LinkedHashMap<>(fields));
-        fieldUsageMap.computeIfAbsent(collectionName, key -> new HashMap<>()).merge(fields, 1, Integer::sum);
+        indexPools.computeIfAbsent(collectionName, key -> ConcurrentHashMap.newKeySet()).add(new LinkedHashMap<>(fields));
+        fieldUsageMap.computeIfAbsent(collectionName, key -> new ConcurrentHashMap<>()).merge(fields, 1, Integer::sum);
     }
 
     @PreDestroy
     @Scheduled(fixedDelay = 10 * 60 * 1000)
     public void autoFlushIndexes() {
-        for (String collection : fieldUsageMap.keySet()) {
-            Map<LinkedHashMap<String, Sort.Direction>, Integer> fieldCounts = fieldUsageMap.getOrDefault(collection, Collections.emptyMap());
+        Map<String, ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer>> snapshot = new HashMap<>(fieldUsageMap);
+        fieldUsageMap.clear();
+
+        for (Map.Entry<String, ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer>> collectionEntry : snapshot.entrySet()) {
+            String collection = collectionEntry.getKey();
+            Map<LinkedHashMap<String, Sort.Direction>, Integer> fieldCounts = collectionEntry.getValue();
             List<IndexInfo> existingIndexes = mongoTemplate.indexOps(collection).getIndexInfo();
 
             for (Map.Entry<LinkedHashMap<String, Sort.Direction>, Integer> entry : fieldCounts.entrySet()) {
@@ -50,7 +54,6 @@ public class DeferredIndexManager {
                 }
             }
         }
-        fieldUsageMap.clear();
     }
 
     public void forceCreateAll() {

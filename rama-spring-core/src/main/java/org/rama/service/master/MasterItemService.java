@@ -3,18 +3,31 @@ package org.rama.service.master;
 import org.rama.entity.master.MasterItem;
 import org.rama.repository.master.MasterItemRepository;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MasterItemService {
     private final MasterItemRepository masterItemRepository;
+    private final Map<String, CachedItem> itemCache = new ConcurrentHashMap<>();
+    private static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
     public MasterItemService(MasterItemRepository masterItemRepository) {
         this.masterItemRepository = masterItemRepository;
     }
 
     public MasterItem getMasterItem(String groupKey, String itemCode) {
-        return masterItemRepository.findMasterItemByGroupKeyAndItemCode(groupKey, itemCode).orElse(null);
+        String cacheKey = groupKey + "|" + itemCode;
+        CachedItem cached = itemCache.get(cacheKey);
+        if (cached != null && !cached.isExpired()) {
+            return cached.item;
+        }
+        MasterItem item = masterItemRepository.findMasterItemByGroupKeyAndItemCode(groupKey, itemCode).orElse(null);
+        itemCache.put(cacheKey, new CachedItem(item));
+        return item;
     }
 
     public List<MasterItem> getMasterItems(String groupKey) {
@@ -55,5 +68,19 @@ public class MasterItemService {
             result = item.getItemCode();
         }
         return result;
+    }
+
+    public void evictCache() {
+        itemCache.clear();
+    }
+
+    private record CachedItem(MasterItem item, Instant cachedAt) {
+        CachedItem(MasterItem item) {
+            this(item, Instant.now());
+        }
+
+        boolean isExpired() {
+            return Instant.now().isAfter(cachedAt.plus(CACHE_TTL));
+        }
     }
 }
