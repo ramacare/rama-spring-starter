@@ -20,6 +20,8 @@ import org.hibernate.service.spi.SessionFactoryServiceRegistry;
 import org.quartz.Scheduler;
 import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
+import org.rama.entity.security.ApiKey;
+import org.rama.ftp.FtpProperties;
 import org.rama.graphql.directive.EmailConstraint;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
 import org.rama.listener.global.GlobalAuditablePreUpdateListener;
@@ -47,6 +49,8 @@ import org.rama.repository.system.ClientConfigRepository;
 import org.rama.repository.system.SystemLogRepository;
 import org.rama.repository.system.SystemParameterRepository;
 import org.rama.service.*;
+import org.rama.service.EntityEventService;
+import org.rama.service.TransactionRunnerService;
 import org.rama.service.document.BarcodeReaderService;
 import org.rama.service.document.BarcodeService;
 import org.rama.service.document.ImageService;
@@ -102,10 +106,11 @@ import java.util.Map;
         "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration",
         "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
 })
-@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class})
+@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class})
+@org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
-    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class})
+    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class})
     @ConditionalOnProperty(prefix = "rama.jpa", name = "enabled", havingValue = "true", matchIfMissing = true)
     static class RamaStarterJpaConfiguration {
     }
@@ -230,10 +235,11 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(Scheduler.class)
-    QuartzService quartzService(Scheduler scheduler, BeanFactory beanFactory) {
-        List<String> basePackages = AutoConfigurationPackages.has(beanFactory)
+    QuartzService quartzService(Scheduler scheduler, BeanFactory beanFactory, RamaStarterProperties properties) {
+        List<String> basePackages = new java.util.ArrayList<>(AutoConfigurationPackages.has(beanFactory)
                 ? AutoConfigurationPackages.get(beanFactory)
-                : Collections.emptyList();
+                : Collections.emptyList());
+        basePackages.addAll(properties.getQuartz().getAllowedJobPackages());
         return new QuartzService(scheduler, basePackages);
     }
 
@@ -368,10 +374,29 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    TransactionRunnerService transactionRunnerService() {
+        return new TransactionRunnerService();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    EntityEventService entityEventService(org.springframework.context.ApplicationEventPublisher publisher, TransactionRunnerService transactionRunnerService) {
+        return new EntityEventService(publisher, transactionRunnerService);
+    }
+
+    @Bean
     @ConditionalOnBean(VaultTemplate.class)
     @ConditionalOnMissingBean
     VaultService vaultService(VaultTemplate vaultTemplate) {
         return new VaultService(vaultTemplate);
+    }
+
+    @Bean
+    @ConditionalOnBean(VaultService.class)
+    @ConditionalOnMissingBean
+    CertificateService certificateService(VaultService vaultService) {
+        return new CertificateService(vaultService);
     }
 
     @Bean
@@ -569,6 +594,71 @@ public class RamaStarterAutoConfiguration {
         liquibase.setChangeLog(properties.getChangeLog());
         liquibase.setShouldRun(properties.isEnabled());
         return liquibase;
+    }
+
+    @Bean
+    @ConditionalOnClass(name = "org.apache.commons.net.ftp.FTPClient")
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "rama.ftp", name = "enabled", havingValue = "true")
+    org.rama.ftp.FtpConnectionManager ftpConnectionManager(org.rama.ftp.FtpProperties ftpProperties) {
+        return new org.rama.ftp.FtpConnectionManager(ftpProperties);
+    }
+
+    @Bean
+    @ConditionalOnBean(org.rama.ftp.FtpConnectionManager.class)
+    @ConditionalOnMissingBean
+    org.rama.ftp.FtpService ftpService(org.rama.ftp.FtpConnectionManager ftpConnectionManager, org.rama.ftp.FtpProperties ftpProperties) {
+        return new org.rama.ftp.FtpService(ftpConnectionManager, ftpProperties);
+    }
+
+    /**
+     * Logs a warning at startup when rama.ftp.enabled=true but commons-net is not on the classpath.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(prefix = "rama.ftp", name = "enabled", havingValue = "true")
+    static class FtpMissingDependencyCheck {
+        private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FtpMissingDependencyCheck.class);
+
+        FtpMissingDependencyCheck() {
+            try {
+                Class.forName("org.apache.commons.net.ftp.FTPClient");
+            } catch (ClassNotFoundException e) {
+                log.warn("""
+
+                        ┌──────────────────────────────────────────────────────────────┐
+                        │  rama.ftp.enabled=true but commons-net is not on the         │
+                        │  classpath. FTP support will NOT be activated.                │
+                        │                                                              │
+                        │  Add to your pom.xml:                                        │
+                        │    <dependency>                                               │
+                        │        <groupId>commons-net</groupId>                        │
+                        │        <artifactId>commons-net</artifactId>                  │
+                        │        <version>3.12.0</version>                             │
+                        │    </dependency>                                              │
+                        └──────────────────────────────────────────────────────────────┘
+                        """);
+            }
+        }
+    }
+
+    // ── API Key authentication (disabled by default) ────────────────────
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(org.rama.repository.security.ApiKeyRepository.class)
+    @ConditionalOnProperty(prefix = "rama.api-key", name = "enabled", havingValue = "true")
+    org.rama.security.ApiKeyService apiKeyService(
+            org.rama.repository.security.ApiKeyRepository apiKeyRepository,
+            org.springframework.core.env.Environment environment) {
+        String appName = environment.getProperty("spring.application.name", "");
+        return new org.rama.security.ApiKeyService(apiKeyRepository, appName);
+    }
+
+    @Bean
+    @ConditionalOnBean(org.rama.security.ApiKeyService.class)
+    @ConditionalOnMissingBean
+    org.rama.security.ApiKeyAuthFilter apiKeyAuthFilter(org.rama.security.ApiKeyService apiKeyService) {
+        return new org.rama.security.ApiKeyAuthFilter(apiKeyService);
     }
 
 }
