@@ -90,4 +90,8 @@ public final class DateTimeUtil {
     public static OffsetDateTime getEndOfToday() {
         return getStartOfToday().plusDays(1).minusNanos(1);
     }
+
+    public static OffsetDateTime dateToOffsetDateTime(java.util.Date date) {
+        return date != null ? date.toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime() : null;
+    }
 }

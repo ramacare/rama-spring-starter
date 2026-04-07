@@ -36,6 +36,11 @@ public class ApiController {
         return genericEntityService.updateEntity(Api.class, apiRepository, input, "id");
     }
 
+    @MutationMapping(name = "deleteApi")
+    public Optional<Api> deleteEntity(@Argument Map<String, Object> input) {
+        return genericEntityService.hardDeleteEntity(Api.class, apiRepository, input, "id");
+    }
+
     @QueryMapping
     public PageableDTO<Api> apiPageable(@Argument PageableInput pageable) {
         return GenericEntityService.findEntityPageable(apiRepository,pageable);

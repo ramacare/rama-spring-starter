@@ -12,4 +12,6 @@ import java.util.Optional;
 public interface ClientConfigRepository extends BaseRepository<ClientConfig, Long>, QuerydslPredicateExecutor<ClientConfig> {
     Optional<ClientConfig> findByComputerName(String computerName);
     List<ClientConfig> findByFingerprint(String fingerprint);
+    boolean existsByComputerName(String computerName);
+    boolean existsByFingerprint(String fingerprint);
 }
