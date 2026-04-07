@@ -3,12 +3,12 @@ package org.rama.service;
 import org.hibernate.event.spi.PostUpdateEvent;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.type.Type;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.rama.entity.Revision;
@@ -28,11 +28,15 @@ class RevisionServiceTest {
     @Mock
     private RevisionRepository revisionRepository;
 
-    @InjectMocks
     private RevisionService revisionService;
 
     @Captor
     private ArgumentCaptor<Revision> revisionCaptor;
+
+    @BeforeEach
+    void setUp() {
+        revisionService = new RevisionService(revisionRepository);
+    }
 
     @Test
     void saveRevision_shouldPersistWithCorrectFields() {
@@ -96,7 +100,7 @@ class RevisionServiceTest {
     }
 
     @Test
-    void getDirty_shouldDetectChangedFields() {
+    void extractUpdateDirty_shouldDetectChangedFields() {
         // Arrange
         PostUpdateEvent event = mock(PostUpdateEvent.class);
         EntityPersister persister = mock(EntityPersister.class);
@@ -124,7 +128,7 @@ class RevisionServiceTest {
         when(event.getState()).thenReturn(newState);
 
         // Act
-        Map<String, Object> dirty = revisionService.getDirty(event, null);
+        Map<String, Object> dirty = revisionService.extractUpdateDirty(event, null);
 
         // Assert - "name" changed from John to Jane, "age" did not change
         assertThat(dirty).containsKey("name");
@@ -136,7 +140,7 @@ class RevisionServiceTest {
     }
 
     @Test
-    void getDirty_shouldSkipEntityTypeProperties() {
+    void extractUpdateDirty_shouldSkipEntityTypeProperties() {
         // Arrange
         PostUpdateEvent event = mock(PostUpdateEvent.class);
         EntityPersister persister = mock(EntityPersister.class);
@@ -161,7 +165,7 @@ class RevisionServiceTest {
         when(event.getState()).thenReturn(newState);
 
         // Act
-        Map<String, Object> dirty = revisionService.getDirty(event, null);
+        Map<String, Object> dirty = revisionService.extractUpdateDirty(event, null);
 
         // Assert - entity type properties should be skipped
         assertThat(dirty).containsKey("name");
