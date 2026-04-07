@@ -30,24 +30,36 @@ Publishing happens via GitHub Actions on tag push. See docs/publishing.md.
 - `rama-spring-boot-starter` -- Consumer-facing dependency bundle (includes full Spring stack)
 
 ### Key Packages (`org.rama.*`)
-- `entity` -- Base types (`Auditable`, `StatusCode`, `Response`), domain entities (`api`, `asset`, `master`, `system`)
+- `entity` -- Base types (`Auditable`, `StatusCode`, `Response`), domain entities (`api`, `asset`, `master`, `security`, `system`)
+- `event` -- Entity lifecycle events: `EntityCreated`, `EntityUpdated`, `IEntityEvent`; triggered via `@EntityEvent` annotation
 - `repository` -- `BaseRepository<T,ID>`, `SoftDeleteRepository`, domain repositories
-- `service` -- `GenericEntityService`, `StorageService`, `RevisionService`, domain services
+- `service` -- `GenericEntityService`, `GenericApiService`, `StorageService`, `RevisionService`, `EntityEventService`, `TransactionRunnerService`, `CertificateService`, `VaultService`
 - `service.document` -- Document processing: `PdfService`, `BarcodeService`, `ImageService`, `AbstractSignService`
 - `service.document.template` -- DOCX template processing: `DocxTemplateProcessor`, `ReplacementProcessor`
 - `service.document.replacement` -- `ReplacementObjectHook`, `ReplacementStringHook`, `ReplacementHooks`
 - `service.document.transformers` -- `ReplacementTransformer`
 - `service.document.printTemplate` -- `TemplatePreprocessor`
+- `ftp` -- FTP integration: `FtpService`, `FtpConnection`, `FtpConnectionManager`, `FtpProperties`
+- `security` -- API key authentication: `ApiKeyService`, `ApiKeyAuthFilter`, `ApiKey` entity
 - `mongo` -- MongoDB sync: `IndexAwareMongoTemplate`, `MongoSyncService`, listeners
 - `meilisearch` -- Meilisearch sync: `MeilisearchService`, listeners, mappers
-- `util` -- Shared utilities: `DateTimeUtil`, `EncryptionUtil`, `QueryUtil`, etc.
-- `autoconfigure` -- `RamaStarterAutoConfiguration`, `RamaStarterProperties`
+- `util` -- Shared utilities: `DateTimeUtil`, `EncryptionUtil`, `QueryUtil`, `NumberUtil`, etc.
+- `autoconfigure` -- `RamaStarterAutoConfiguration`, `RamaStarterSecurityAutoConfiguration`, `RamaStarterProperties`
 
 ### Entity Pattern
 Every JPA entity implements `Auditable` and embeds `UserstampField` + `TimestampField`. Use `@Data @NoArgsConstructor` from Lombok. Use `StatusCode` enum for lifecycle state.
 
 ### Repository Pattern
 All repositories extend `BaseRepository<T, ID>`. Add `SoftDeleteRepository` for soft-delete with `withoutTerminated()`. Add `QuerydslPredicateExecutor` for filtering.
+
+### Global Hibernate Listener Pattern
+All global Hibernate event listeners (revision, mongo sync, meilisearch) follow the same pattern:
+- **Listener** handles `TransactionSynchronization.afterCommit` directly (not the service)
+- **Listener** extracts data from the Hibernate event, then calls the service's `@Async @Transactional` method through the Spring proxy
+- **Service** provides data extraction helpers and the `@Async @Transactional` save/sync method
+- `requiresPostCommitHandling()` returns `false` — the listener manages post-commit via Spring's `TransactionSynchronizationManager`
+
+This avoids self-invocation in the service (calling `this.method()` bypasses the CGLIB proxy, so `@Async` and `@Transactional` would not activate).
 
 ### Auto-Configuration
 Most beans are registered with `@ConditionalOnMissingBean`. Consumer applications can override any starter bean.
@@ -62,6 +74,8 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `rama.meilisearch.initialize-indexes` -- Meilisearch index auto-initialization
 - `rama.graphql.enabled` -- GraphQL scalars and directives
 - `rama.liquibase.enabled` -- Starter Liquibase migrations
+- `rama.ftp.enabled` -- FTP connection manager (default `false`)
+- `rama.security.api-key.enabled` -- API key authentication filter
 
 **Connection/service properties** (no `rama.` prefix):
 - `meilisearch.host`, `meilisearch.master-key` -- Meilisearch connection
@@ -69,6 +83,7 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `encrypt.key` -- AES encryption key
 - `document.*` -- Document processing (Gotenberg server, patterns)
 - `app.file-storage-path`, `app.file-storage-location` -- File storage config
+- `rama.ftp.host`, `rama.ftp.port`, `rama.ftp.username`, `rama.ftp.password` -- FTP connection
 
 ### Encryption
 `EncryptionUtil` provides AES/CBC encryption. Used directly by `Encrypt` and `JsonEncryptConverter` JPA converters. Key set via `encrypt.key` property.
@@ -77,6 +92,8 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 
 - Use Lombok (`@Data`, `@NoArgsConstructor`, `@Builder`, `@RequiredArgsConstructor`) for all entities and DTOs
 - GraphQL controllers use `@Controller` (not `@RestController`) with `@MutationMapping`/`@QueryMapping`
-- Mutations delegate to `GenericEntityService.createEntity()` / `updateEntity()`
+- Mutations delegate to `GenericEntityService.createEntity()` / `updateEntity()` / `deleteEntity()`
+- Use `@EntityEvent` annotation on entities to auto-publish `EntityCreated` / `EntityUpdated` events via `EntityEventService`
+- API key authentication via `ApiKeyAuthFilter` — keys stored in `api_key` table, validated by `ApiKeyService`
 - Liquibase migrations in `rama-spring-autoconfigure/src/main/resources/db/changelog/`
 - Tests use JUnit 5 with `@Tag("unit")` or `@Tag("integration")`

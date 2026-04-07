@@ -14,6 +14,8 @@ import org.rama.entity.master.MasterItem;
 import org.rama.service.RevisionService;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -34,11 +36,19 @@ class RevisionListenerTest {
 
         MasterItem entity = new MasterItem("$Test", "001", "Value");
         PostInsertEvent event = mock(PostInsertEvent.class);
+        EntityPersister persister = mock(EntityPersister.class);
         when(event.getEntity()).thenReturn(entity);
+        when(event.getPersister()).thenReturn(persister);
+        when(event.getId()).thenReturn("testId");
+        when(revisionService.buildRevisionKey(persister, "testId")).thenReturn("key");
+        when(persister.getEntityName()).thenReturn("org.rama.entity.master.MasterItem");
+        when(revisionService.resolveEntityName("org.rama.entity.master.MasterItem")).thenReturn("MasterItem");
+        when(revisionService.extractInsertData(event)).thenReturn(Map.of("test", "data"));
 
         listener.onPostInsert(event);
 
-        verify(revisionService).saveRevision(event);
+        // Since no TransactionSynchronizationManager active, it calls saveRevision directly
+        verify(revisionService).saveRevision("key", "MasterItem", Map.of("test", "data"), null);
     }
 
     @Test
@@ -74,13 +84,21 @@ class RevisionListenerTest {
 
         MasterItem entity = new MasterItem("$Test", "001", "Value");
         PostUpdateEvent event = mock(PostUpdateEvent.class);
-        when(event.getEntity()).thenReturn(entity);
-
+        EntityPersister persister = mock(EntityPersister.class);
         TrackRevision annotation = MasterItem.class.getAnnotation(TrackRevision.class);
+
+        when(event.getEntity()).thenReturn(entity);
+        when(event.getPersister()).thenReturn(persister);
+        when(event.getId()).thenReturn("testId");
+        when(revisionService.buildRevisionKey(persister, "testId")).thenReturn("key");
+        when(persister.getEntityName()).thenReturn("org.rama.entity.master.MasterItem");
+        when(revisionService.resolveEntityName("org.rama.entity.master.MasterItem")).thenReturn("MasterItem");
+        when(revisionService.extractUpdateDirty(event, annotation.value())).thenReturn(Map.of("name", "changed"));
+        when(revisionService.extractUpdateData(event)).thenReturn(Map.of("name", "changed"));
 
         listener.onPostUpdate(event);
 
-        verify(revisionService).saveRevision(event, annotation.value());
+        verify(revisionService).saveRevision("key", "MasterItem", Map.of("name", "changed"), Map.of("name", "changed"));
     }
 
     @Test
@@ -97,12 +115,12 @@ class RevisionListenerTest {
     }
 
     @Test
-    void requiresPostCommitHandling_shouldReturnTrue() {
+    void requiresPostCommitHandling_shouldReturnFalse() {
         GlobalPostInsertRevisionListener insertListener = new GlobalPostInsertRevisionListener(revisionServiceProvider);
         GlobalPostUpdateRevisionListener updateListener = new GlobalPostUpdateRevisionListener(revisionServiceProvider);
         EntityPersister persister = mock(EntityPersister.class);
 
-        assertThat(insertListener.requiresPostCommitHandling(persister)).isTrue();
-        assertThat(updateListener.requiresPostCommitHandling(persister)).isTrue();
+        assertThat(insertListener.requiresPostCommitHandling(persister)).isFalse();
+        assertThat(updateListener.requiresPostCommitHandling(persister)).isFalse();
     }
 }
