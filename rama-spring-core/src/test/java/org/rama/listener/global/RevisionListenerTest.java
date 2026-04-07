@@ -3,6 +3,7 @@ package org.rama.listener.global;
 import org.hibernate.event.spi.PostInsertEvent;
 import org.hibernate.event.spi.PostUpdateEvent;
 import org.hibernate.persister.entity.EntityPersister;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -75,10 +76,10 @@ class RevisionListenerTest {
         PostUpdateEvent event = mock(PostUpdateEvent.class);
         when(event.getEntity()).thenReturn(entity);
 
+        TrackRevision annotation = MasterItem.class.getAnnotation(TrackRevision.class);
+
         listener.onPostUpdate(event);
 
-        // MasterItem has @TrackRevision with default empty fields
-        TrackRevision annotation = MasterItem.class.getAnnotation(TrackRevision.class);
         verify(revisionService).saveRevision(event, annotation.value());
     }
 
@@ -96,12 +97,12 @@ class RevisionListenerTest {
     }
 
     @Test
-    void requiresPostCommitHandling_shouldReturnFalse() {
+    void requiresPostCommitHandling_shouldReturnTrue() {
         GlobalPostInsertRevisionListener insertListener = new GlobalPostInsertRevisionListener(revisionServiceProvider);
         GlobalPostUpdateRevisionListener updateListener = new GlobalPostUpdateRevisionListener(revisionServiceProvider);
         EntityPersister persister = mock(EntityPersister.class);
 
-        assertThat(insertListener.requiresPostCommitHandling(persister)).isFalse();
-        assertThat(updateListener.requiresPostCommitHandling(persister)).isFalse();
+        assertThat(insertListener.requiresPostCommitHandling(persister)).isTrue();
+        assertThat(updateListener.requiresPostCommitHandling(persister)).isTrue();
     }
 }
