@@ -27,6 +27,6 @@ public class GlobalPostUpdateRevisionListener implements PostUpdateEventListener
 
     @Override
     public boolean requiresPostCommitHandling(EntityPersister entityPersister) {
-        return false;
+        return true;
     }
 }

@@ -5,6 +5,8 @@ import org.hibernate.event.spi.PostUpdateEventListener;
 import org.hibernate.persister.entity.EntityPersister;
 import org.rama.annotation.SyncToMeilisearch;
 import org.rama.meilisearch.service.MeilisearchService;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 public class GlobalPostUpdateMeilisearchListener implements PostUpdateEventListener {
     private final MeilisearchService meilisearchService;
@@ -17,12 +19,21 @@ public class GlobalPostUpdateMeilisearchListener implements PostUpdateEventListe
     public void onPostUpdate(PostUpdateEvent postUpdateEvent) {
         Object entity = postUpdateEvent.getEntity();
         if (entity.getClass().isAnnotationPresent(SyncToMeilisearch.class)) {
-            meilisearchService.sync(entity);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        meilisearchService.sync(entity);
+                    }
+                });
+            } else {
+                meilisearchService.sync(entity);
+            }
         }
     }
 
     @Override
     public boolean requiresPostCommitHandling(EntityPersister entityPersister) {
-        return false;
+        return true;
     }
 }

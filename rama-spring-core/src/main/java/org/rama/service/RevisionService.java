@@ -7,6 +7,9 @@ import org.hibernate.type.Type;
 import org.rama.entity.Revision;
 import org.rama.repository.revision.RevisionRepository;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -19,6 +22,7 @@ public class RevisionService {
     }
 
     @Async
+    @Transactional
     public void saveRevision(String revisionKey, String revisionEntity, Map<String, Object> revisionData, Map<String, Object> revisionChange) {
         if (revisionData == null || revisionData.isEmpty()) {
             return;
@@ -35,33 +39,40 @@ public class RevisionService {
         revisionRepository.save(revision);
     }
 
-    @Async
+    public void saveRevision(PostInsertEvent postInsertEvent) {
+        String revisionKey = buildRevisionKey(postInsertEvent.getPersister(), postInsertEvent.getId());
+        String revisionEntity = resolveEntityName(postInsertEvent.getPersister().getEntityName());
+        Map<String, Object> current = getCurrent(postInsertEvent);
+
+        saveAfterCommit(revisionKey, revisionEntity, current, null);
+    }
+
     public void saveRevision(PostUpdateEvent postUpdateEvent, String[] fields) {
-        String revisionKey = postUpdateEvent.getPersister().getEntityName() + "^"
-                + postUpdateEvent.getPersister().getIdentifierPropertyName() + "^"
-                + postUpdateEvent.getId();
+        String revisionKey = buildRevisionKey(postUpdateEvent.getPersister(), postUpdateEvent.getId());
+        String revisionEntity = resolveEntityName(postUpdateEvent.getPersister().getEntityName());
         Map<String, Object> dirty = getDirty(postUpdateEvent, fields);
+        Map<String, Object> current = getCurrent(postUpdateEvent);
+
         if (!dirty.isEmpty()) {
-            saveRevision(
-                    revisionKey,
-                    resolveEntityName(postUpdateEvent.getPersister().getEntityName()),
-                    getCurrent(postUpdateEvent),
-                    dirty
-            );
+            saveAfterCommit(revisionKey, revisionEntity, current, dirty);
         }
     }
 
-    @Async
-    public void saveRevision(PostInsertEvent postInsertEvent) {
-        String revisionKey = postInsertEvent.getPersister().getEntityName() + "^"
-                + postInsertEvent.getPersister().getIdentifierPropertyName() + "^"
-                + postInsertEvent.getId();
-        saveRevision(
-                revisionKey,
-                resolveEntityName(postInsertEvent.getPersister().getEntityName()),
-                getCurrent(postInsertEvent),
-                null
-        );
+    private void saveAfterCommit(String revisionKey, String revisionEntity, Map<String, Object> revisionData, Map<String, Object> revisionChange) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    saveRevision(revisionKey, revisionEntity, revisionData, revisionChange);
+                }
+            });
+        } else {
+            saveRevision(revisionKey, revisionEntity, revisionData, revisionChange);
+        }
+    }
+
+    private String buildRevisionKey(EntityPersister persister, Object id) {
+        return persister.getEntityName() + "^" + persister.getIdentifierPropertyName() + "^" + id;
     }
 
     protected Map<String, Object> getDirty(PostUpdateEvent event, String[] fields) {
