@@ -29,13 +29,13 @@ import java.util.regex.Pattern;
 public class GenericApiService {
     private final ApiRepository apiRepository;
     private final ApiHeaderSetRepository apiHeaderSetRepository;
-    private final WebClient.Builder webClientBuilder;
+    private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
     public GenericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
         this.apiRepository = apiRepository;
         this.apiHeaderSetRepository = apiHeaderSetRepository;
-        this.webClientBuilder = webClientBuilder;
+        this.webClient = webClientBuilder.build();
         this.objectMapper = objectMapper;
     }
 
@@ -56,7 +56,7 @@ public class GenericApiService {
             MediaType contentType = MediaType.parseMediaType(contentTypeValue);
             HttpMethod method = HttpMethod.valueOf(api.getSourceApiMethod());
 
-            ResponseEntity<T> response = webClientBuilder.build()
+            ResponseEntity<T> response = webClient
                     .method(method)
                     .uri(UriComponentsBuilder.fromUriString(uri).build(true).toUri())
                     .contentType(contentType)
@@ -85,8 +85,8 @@ public class GenericApiService {
             }
             return Optional.empty();
         } catch (Exception ex) {
-            log.error("API [{}] failed. requestBody={}, exceptionType={}, message={}",
-                    apiId, requestBody, ex.getClass().getName(), ex.getMessage());
+            log.error("API [{}] failed. exceptionType={}, message={}",
+                    apiId, ex.getClass().getName(), ex.getMessage());
             if (!throwError && ex instanceof WebClientResponseException responseException) {
                 try {
                     T entity = responseException.getResponseBodyAs(returnType);
@@ -231,4 +231,5 @@ public class GenericApiService {
     private String encode(String input) {
         return URLEncoder.encode(input, StandardCharsets.UTF_8);
     }
+
 }

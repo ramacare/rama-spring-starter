@@ -316,3 +316,33 @@ databaseChangeLog:
             name: revision_entity
         - column:
             name: mrn
+- changeSet:
+    id: rama-spring-system-007-revision-datetime-indexes
+    author: claude
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: revision
+    changes:
+    - createIndex:
+        tableName: revision
+        indexName: ix_revision__revision_key_datetime
+        columns:
+        - column:
+            name: revision_key
+        - column:
+            name: revision_datetime
+            descending: true
+    - createIndex:
+        tableName: revision
+        indexName: ix_revision__revision_entity_mrn_datetime
+        columns:
+        - column:
+            name: revision_entity
+        - column:
+            name: mrn
+        - column:
+            name: revision_datetime
+            descending: true

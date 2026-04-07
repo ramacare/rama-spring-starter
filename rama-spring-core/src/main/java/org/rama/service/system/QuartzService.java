@@ -91,7 +91,7 @@ public class QuartzService {
     public boolean scheduleJob(String name, String group, String cronExpression, String jobClass, String description, Map<?, ?> jobData, Scheduler targetScheduler) {
         Scheduler currentScheduler = targetScheduler != null ? targetScheduler : this.scheduler;
         try {
-            Class<? extends Job> clazz = (Class<? extends Job>) Class.forName(jobClass);
+            Class<? extends Job> clazz = resolveJobClass(jobClass);
             JobDataMap jobDataMap = jobData != null ? new JobDataMap(jobData) : new JobDataMap();
             JobDetail jobDetail = JobBuilder.newJob(clazz)
                     .storeDurably(true)
@@ -121,8 +121,7 @@ public class QuartzService {
     public boolean scheduleOneTimeJob(String name, String group, String jobClass, String description, Map<?, ?> jobData, Scheduler targetScheduler) {
         Scheduler currentScheduler = targetScheduler != null ? targetScheduler : this.scheduler;
         try {
-            @SuppressWarnings("unchecked")
-            Class<? extends Job> clazz = (Class<? extends Job>) Class.forName(jobClass);
+            Class<? extends Job> clazz = resolveJobClass(jobClass);
             JobDataMap jobDataMap = jobData != null ? new JobDataMap(jobData) : new JobDataMap();
             JobDetail jobDetail = JobBuilder.newJob(clazz)
                     .storeDurably(true)
@@ -202,6 +201,20 @@ public class QuartzService {
 
     public JobDetail getJob(String name, String group) throws SchedulerException {
         return scheduler.getJobDetail(JobKey.jobKey(name, group));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Class<? extends Job> resolveJobClass(String jobClass) throws ClassNotFoundException {
+        Class<?> clazz = Class.forName(jobClass);
+        if (!Job.class.isAssignableFrom(clazz)) {
+            throw new IllegalArgumentException("Class " + jobClass + " does not implement org.quartz.Job");
+        }
+        boolean allowed = jobScanBasePackages.stream().anyMatch(jobClass::startsWith)
+                || jobClass.startsWith("org.rama.");
+        if (!allowed) {
+            throw new SecurityException("Job class " + jobClass + " is not in an allowed package. Allowed: " + jobScanBasePackages);
+        }
+        return (Class<? extends Job>) clazz;
     }
 
     private OffsetDateTime toOffsetDateTime(Date date) {

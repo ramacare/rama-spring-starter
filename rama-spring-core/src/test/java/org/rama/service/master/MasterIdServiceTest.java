@@ -17,8 +17,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+
+
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -39,7 +40,7 @@ class MasterIdServiceTest {
         String expectedPrefix = new SimpleDateFormat(prefixPattern).format(new Date());
 
         when(masterIdRepository.findFirstByIdTypeAndPrefix("MRN", expectedPrefix)).thenReturn(null);
-        when(masterIdRepository.save(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdRepository.saveAndFlush(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
 
         String result = masterIdService.issue("MRN", prefixPattern, 5, "", true);
 
@@ -71,7 +72,7 @@ class MasterIdServiceTest {
         String expectedPrefix = "X";
 
         when(masterIdRepository.findFirstByIdTypeAndPrefix("TEST", expectedPrefix)).thenReturn(null);
-        when(masterIdRepository.save(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdRepository.saveAndFlush(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
 
         String result = masterIdService.issue("TEST", prefixPattern, 3, "", true);
 
@@ -83,11 +84,11 @@ class MasterIdServiceTest {
     void issue_shouldCreateNewMasterIdWhenNoneExists() {
         String prefixPattern = "'N'";
         when(masterIdRepository.findFirstByIdTypeAndPrefix("TYPE", "N")).thenReturn(null);
-        when(masterIdRepository.save(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdRepository.saveAndFlush(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
 
         masterIdService.issue("TYPE", prefixPattern, 4, "", false);
 
-        verify(masterIdRepository).save(masterIdCaptor.capture());
+        verify(masterIdRepository).saveAndFlush(masterIdCaptor.capture());
         MasterId saved = masterIdCaptor.getValue();
         assertThat(saved.getIdType()).isEqualTo("TYPE");
         assertThat(saved.getPrefix()).isEqualTo("N");
@@ -113,7 +114,7 @@ class MasterIdServiceTest {
     void issueNoCheckDigit_shouldNotAppendCheckDigit() {
         String prefixPattern = "'Z'";
         when(masterIdRepository.findFirstByIdTypeAndPrefix("TYPE", "Z")).thenReturn(null);
-        when(masterIdRepository.save(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdRepository.saveAndFlush(any(MasterId.class))).thenAnswer(inv -> inv.getArgument(0));
 
         String result = masterIdService.issueNoCheckDigit("TYPE", prefixPattern, 3);
 

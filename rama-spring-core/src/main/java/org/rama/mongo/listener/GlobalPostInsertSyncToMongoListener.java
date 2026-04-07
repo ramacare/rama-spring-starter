@@ -5,6 +5,8 @@ import org.hibernate.event.spi.PostInsertEventListener;
 import org.hibernate.persister.entity.EntityPersister;
 import org.rama.annotation.SyncToMongo;
 import org.rama.mongo.service.MongoSyncService;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 public class GlobalPostInsertSyncToMongoListener implements PostInsertEventListener {
     private final MongoSyncService mongoSyncService;
@@ -17,12 +19,21 @@ public class GlobalPostInsertSyncToMongoListener implements PostInsertEventListe
     public void onPostInsert(PostInsertEvent postInsertEvent) {
         Object entity = postInsertEvent.getEntity();
         if (entity.getClass().isAnnotationPresent(SyncToMongo.class)) {
-            mongoSyncService.sync(entity);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        mongoSyncService.sync(entity);
+                    }
+                });
+            } else {
+                mongoSyncService.sync(entity);
+            }
         }
     }
 
     @Override
     public boolean requiresPostCommitHandling(EntityPersister entityPersister) {
-        return false;
+        return true;
     }
 }

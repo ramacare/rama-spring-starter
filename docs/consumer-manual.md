@@ -246,3 +246,63 @@ databaseChangeLog:
 ```
 
 Starter-managed tables: `api`, `api_header_set`, `asset_file`, `master_group`, `master_id`, `master_item`, `revision`, `system_log`, `system_parameter`, `system_template`, `client_config`
+
+## 8. FTP Support (Optional)
+
+The starter provides FTP infrastructure for file exchange (e.g., HL7 lab/radiology integration). It is **disabled by default**.
+
+### Enable FTP
+
+1. Add the `commons-net` dependency to your `pom.xml` (it is optional in the starter and not pulled transitively):
+
+```xml
+<dependency>
+    <groupId>commons-net</groupId>
+    <artifactId>commons-net</artifactId>
+    <version>3.12.0</version>
+</dependency>
+```
+
+2. Enable FTP in `application.properties`:
+
+```properties
+rama.ftp.enabled=true
+```
+
+3. Configure servers:
+
+```properties
+ftp.servers.lab.host=ftp.example.com
+ftp.servers.lab.port=21
+ftp.servers.lab.username=user
+ftp.servers.lab.password=secret
+ftp.servers.lab.passive-mode=true
+ftp.servers.lab.inbound-folder=/inbound
+ftp.servers.lab.outbound-folder=/outbound
+```
+
+### Usage
+
+Inject `FtpService` and use its methods:
+
+```java
+@Autowired
+private FtpService ftpService;
+
+// List files
+List<String> files = ftpService.list("lab", "/inbound");
+
+// Upload
+ftpService.upload("lab", "/outbound", "message.hl7", inputStream, true);
+
+// Download
+byte[] data = ftpService.download("lab", "/inbound/result.hl7");
+
+// Read/write text with encoding
+ftpService.writeText("lab", "/outbound", "order.hl7", hl7Message, true);
+String content = ftpService.readText("lab", "/inbound/result.hl7");
+```
+
+### Missing dependency warning
+
+If `rama.ftp.enabled=true` but `commons-net` is not on the classpath, the starter logs a warning at startup with the required dependency snippet. FTP beans will **not** be created.

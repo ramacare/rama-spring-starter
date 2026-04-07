@@ -5,15 +5,15 @@ import org.rama.service.master.MasterItemService;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class StaticValueService implements StaticValueResolver {
     private final MasterItemService masterItemService;
     private final String groupKey;
     private final String currentUsernameFallbackKey;
     private final Duration ttl;
-    private final Map<String, String> staticValues = new ConcurrentHashMap<>();
+    private volatile Map<String, String> staticValues = Map.of();
 
     private volatile Instant lastRetrievedTime;
 
@@ -43,10 +43,11 @@ public class StaticValueService implements StaticValueResolver {
 
     public synchronized void refreshValues() {
         lastRetrievedTime = Instant.now();
-        staticValues.clear();
+        Map<String, String> newValues = new HashMap<>();
         for (MasterItem masterItem : masterItemService.getMasterItems(groupKey)) {
-            staticValues.put(masterItem.getItemCode(), masterItem.getItemValue());
+            newValues.put(masterItem.getItemCode(), masterItem.getItemValue());
         }
+        staticValues = Map.copyOf(newValues);
     }
 
     private boolean isExpired() {

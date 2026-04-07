@@ -10,6 +10,9 @@ import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
 
+import org.rama.entity.PageableDTO;
+import org.rama.entity.PageableInput;
+
 import java.util.Map;
 import java.util.Optional;
 
@@ -30,8 +33,18 @@ public class ApiHeaderSetController {
         return genericEntityService.updateEntity(ApiHeaderSet.class, apiHeaderSetRepository, input, "id");
     }
 
+    @MutationMapping(name = "deleteApiHeaderSet")
+    public Optional<ApiHeaderSet> deleteEntity(@Argument Map<String, Object> input) {
+        return genericEntityService.hardDeleteEntity(ApiHeaderSet.class, apiHeaderSetRepository, input, "id");
+    }
+
     @QueryMapping
     public Optional<ApiHeaderSet> apiHeaderSetById(@Argument String id) {
         return apiHeaderSetRepository.findById(id);
+    }
+
+    @QueryMapping
+    public PageableDTO<ApiHeaderSet> apiHeaderSetPageable(@Argument PageableInput pageable) {
+        return GenericEntityService.findEntityPageable(apiHeaderSetRepository, pageable);
     }
 }

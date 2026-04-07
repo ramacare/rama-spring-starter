@@ -42,18 +42,14 @@ public class MeilisearchService {
     @Async
     public <T> void sync(T entity) {
         try {
-            delayRetrieveTaskInfo(addDocuments(resolveIndexName(entity.getClass()), entity), entity);
+            TaskInfo taskInfo = addDocuments(resolveIndexName(entity.getClass()), entity);
+            meilisearchClient.waitForTask(taskInfo.getTaskUid());
+            Task task = meilisearchClient.getTask(taskInfo.getTaskUid());
+            if (task != null && task.getStatus() == TaskStatus.FAILED) {
+                errorHandler.handleTaskFailure(taskInfo, task, entity);
+            }
         } catch (Exception ex) {
             throw new RuntimeException(ex);
-        }
-    }
-
-    @Async
-    public <T> void delayRetrieveTaskInfo(TaskInfo taskInfo, T entity) {
-        meilisearchClient.waitForTask(taskInfo.getTaskUid());
-        Task task = meilisearchClient.getTask(taskInfo.getTaskUid());
-        if (task != null && task.getStatus() == TaskStatus.FAILED) {
-            errorHandler.handleTaskFailure(taskInfo, task, entity);
         }
     }
 

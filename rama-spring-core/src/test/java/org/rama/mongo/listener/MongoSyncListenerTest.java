@@ -73,9 +73,9 @@ class MongoSyncListenerTest {
     }
 
     @Test
-    void requiresPostCommitHandling_shouldReturnFalse() {
+    void requiresPostCommitHandling_shouldReturnTrue() {
         EntityPersister persister = mock(EntityPersister.class);
-        assertThat(insertListener.requiresPostCommitHandling(persister)).isFalse();
-        assertThat(updateListener.requiresPostCommitHandling(persister)).isFalse();
+        assertThat(insertListener.requiresPostCommitHandling(persister)).isTrue();
+        assertThat(updateListener.requiresPostCommitHandling(persister)).isTrue();
     }
 }

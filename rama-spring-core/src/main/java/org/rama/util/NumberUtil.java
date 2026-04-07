@@ -7,6 +7,16 @@ public final class NumberUtil {
     private NumberUtil() {
     }
 
+    public static BigDecimal toBigDecimal(Object o) {
+        if (o == null) return BigDecimal.ZERO;
+        if (o instanceof BigDecimal bd) return bd;
+        if (o instanceof Integer i) return new BigDecimal(i);
+        if (o instanceof Long l) return new BigDecimal(l);
+        if (o instanceof Double d) return BigDecimal.valueOf(d);
+        String s = o.toString().trim();
+        return s.isEmpty() ? BigDecimal.ZERO : new BigDecimal(s);
+    }
+
     public static String bahtText(Number number) {
         return bahtText(number.toString());
     }

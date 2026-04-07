@@ -19,6 +19,7 @@ import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.querydsl.QuerydslPredicateExecutor;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.Serializable;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 public class GenericEntityService {
     private final JsonMapper mapper;
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> createEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
         T entity;
         try {
@@ -47,15 +49,18 @@ public class GenericEntityService {
             entityInput = SanitizeUtil.sanitizeMap(entityInput);
 
             entity = mapper.convertValue(entityInput, entityClass);
+            if (entity instanceof Auditable auditable) {
+                auditable.setUserstampField(new UserstampField());
+                auditable.setTimestampField(new TimestampField());
+            }
             entity = entityRepository.save(entity);
 
             entityRepository.flush();
             entityRepository.refresh(entity);
 
-            log.debug("Create {} from Map : {}", entityClass.getName(), entityInput);
+            log.debug("Created {} with ID {}", entityClass.getName(), entityId);
         } catch (Exception e) {
-            log.error("Error creating {} from Map : {}", entityClass.getName(), entityInput);
-            log.error(ExceptionUtil.getDeepestExceptionMessage(e));
+            log.error("Error creating {}: {}", entityClass.getName(), ExceptionUtil.getDeepestExceptionMessage(e));
             throw new GraphQLException(ExceptionUtil.getDeepestExceptionMessage(e));
         }
 
@@ -66,6 +71,7 @@ public class GenericEntityService {
         return createEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey, true), entityInput);
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> updateEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
         Optional<T> entity = entityRepository.findById(entityId);
         T updatedEntity = null;
@@ -77,11 +83,8 @@ public class GenericEntityService {
 
                 entityInput = SanitizeUtil.sanitizeMap(entityInput);
 
-                try {
-                    Field timestampField = entityClass.getDeclaredField("timestampField");
-                    timestampField.setAccessible(true);
-                    TimestampField currentTimestampField = (TimestampField) timestampField.get(entity.get());
-
+                if (entity.get() instanceof Auditable auditable) {
+                    TimestampField currentTimestampField = auditable.getTimestampField();
                     if (currentTimestampField != null) {
                         OffsetDateTime currentUpdatedAt = currentTimestampField.getUpdatedAt();
 
@@ -100,19 +103,21 @@ public class GenericEntityService {
 
                         entityInput.put("timestampField", currentTimestampField);
                     }
-                } catch (NoSuchFieldException e) {
-                    log.debug("Field 'timestampField' not found in class {}, skipping timestamp validation.", entityClass.getName());
+
+                    UserstampField currentUserstampField = auditable.getUserstampField();
+                    if (currentUserstampField != null) {
+                        entityInput.put("userstampField", currentUserstampField);
+                    }
                 }
 
-                log.debug("Update {} ID {} from Map : {}", entityClass.getName(), entityId, entityInput);
+                log.debug("Update {} ID {}", entityClass.getName(), entityId);
                 updatedEntity = mapper.updateValue(entity.get(), entityInput);
                 updatedEntity = entityRepository.save(updatedEntity);
 
                 entityRepository.flush();
                 entityRepository.refresh(updatedEntity);
             } catch (Exception e) {
-                log.error("Error updating {} ID {} from Map : {}", entityClass.getName(), entityId, entityInput);
-                log.error(ExceptionUtil.getDeepestExceptionMessage(e));
+                log.error("Error updating {} ID {}: {}", entityClass.getName(), entityId, ExceptionUtil.getDeepestExceptionMessage(e));
                 throw new GraphQLException(ExceptionUtil.getDeepestExceptionMessage(e));
             }
         }
@@ -193,7 +198,7 @@ public class GenericEntityService {
                 entityId = (ID) entityInput.get(entityIdKey);
             }
         } catch (Exception e) {
-            log.error("Error getting {} from Map : {}", entityIdKey, entityInput);
+            log.error("Error getting entity key '{}': {}", entityIdKey, e.getMessage());
             log.error(e.getMessage());
             throw new GraphQLException(e.getMessage());
         }
@@ -254,18 +259,16 @@ public class GenericEntityService {
     }
 
     public static <T, R, K> Map<T, R> batchMappingRelationSingle(List<T> parents, Function<T, K> parentKeyMapper, Function<R, K> childKeyMapper, List<R> itemList) {
-        Map<T, R> resultMap = new HashMap<>();
-
-        for (T parent : parents) {
-            K parentKey = parentKeyMapper.apply(parent);
-            if (parentKey != null) {
-                R matchingItems = itemList.stream().filter(item -> parentKey.equals(childKeyMapper.apply(item))).findFirst().orElse(null);
-                resultMap.put(parent, matchingItems);
-            } else {
-                resultMap.put(parent, null);
-            }
+        Map<K, R> childByKey = new HashMap<>();
+        for (R item : itemList) {
+            childByKey.putIfAbsent(childKeyMapper.apply(item), item);
         }
 
+        Map<T, R> resultMap = new HashMap<>();
+        for (T parent : parents) {
+            K parentKey = parentKeyMapper.apply(parent);
+            resultMap.put(parent, parentKey != null ? childByKey.get(parentKey) : null);
+        }
         return resultMap;
     }
 }

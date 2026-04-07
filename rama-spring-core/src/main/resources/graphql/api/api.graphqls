@@ -9,6 +9,7 @@ extend type Query {
 extend type Mutation {
     createApi(input: ApiInput!): Api
     updateApi(input: ApiInput!): Api
+    deleteApi(input: ApiInput!): Api
 }
 
 type Api {

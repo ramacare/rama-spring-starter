@@ -237,6 +237,7 @@ public class StorageService implements StorageProvider {
 
     public void rawStore(byte[] bytes, String fileName, String contentType, String location, String bucketName) throws Exception {
         bucketName = bucketName.replace("$", "");
+        validatePathSegment(bucketName);
         if ("s3".equalsIgnoreCase(location)) {
             ensureS3();
             if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
@@ -308,6 +309,7 @@ public class StorageService implements StorageProvider {
 
     public byte[] rawRetrieve(String fileName, String location, String bucketName) throws Exception {
         bucketName = bucketName.replace("$", "");
+        validatePathSegment(bucketName);
         if ("s3".equalsIgnoreCase(location)) {
             ensureS3();
             try (InputStream inputStream = minioClient.getObject(GetObjectArgs.builder().bucket(bucketName).object(fileName).build())) {
@@ -393,7 +395,14 @@ public class StorageService implements StorageProvider {
         String value = bucketName == null ? "" : bucketName;
         boolean addYearPrefix = !value.endsWith("$");
         value = value.replace("$", "");
+        validatePathSegment(value);
         return addYearPrefix ? Year.now() + "-" + value : value;
+    }
+
+    private void validatePathSegment(String segment) {
+        if (segment != null && (segment.contains("..") || segment.contains("/") || segment.contains("\\"))) {
+            throw new IllegalArgumentException("Invalid path segment: path traversal characters are not allowed");
+        }
     }
 
     private String buildObjectKey(String uniqueFileName) {

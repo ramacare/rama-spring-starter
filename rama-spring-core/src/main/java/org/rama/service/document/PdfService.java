@@ -23,11 +23,11 @@ import java.util.Collection;
 import java.util.Iterator;
 
 public class PdfService {
-    private final WebClient.Builder webClientBuilder;
+    private final WebClient webClient;
     private final String gotenbergServer;
 
     public PdfService(WebClient.Builder webClientBuilder, String gotenbergServer) {
-        this.webClientBuilder = webClientBuilder;
+        this.webClient = webClientBuilder.build();
         this.gotenbergServer = gotenbergServer;
     }
 
@@ -39,7 +39,7 @@ public class PdfService {
             }
         };
 
-        return webClientBuilder.build()
+        return webClient
                 .post()
                 .uri(gotenbergServer + "/forms/libreoffice/convert")
                 .contentType(MediaType.MULTIPART_FORM_DATA)
