@@ -71,6 +71,7 @@ import org.rama.service.environment.StaticValueService;
 import org.rama.service.master.MasterIdService;
 import org.rama.service.master.MasterItemService;
 import org.rama.service.system.ClientConfigService;
+import org.rama.controller.system.SchedulerController;
 import org.rama.service.system.QuartzService;
 import org.rama.service.system.SystemLogService;
 import org.rama.service.system.SystemParameterService;
@@ -241,6 +242,13 @@ public class RamaStarterAutoConfiguration {
                 : Collections.emptyList());
         basePackages.addAll(properties.getQuartz().getAllowedJobPackages());
         return new QuartzService(scheduler, basePackages);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(QuartzService.class)
+    SchedulerController schedulerController(QuartzService quartzService, org.springframework.core.env.Environment environment, List<Scheduler> schedulers) {
+        return new SchedulerController(quartzService, environment, schedulers);
     }
 
     @Bean
