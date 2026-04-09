@@ -89,6 +89,7 @@ import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCusto
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -108,6 +109,7 @@ import java.util.Map;
         "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
 })
 @EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class})
+@PropertySource(value = "classpath:rama-quartz-defaults.properties", ignoreResourceNotFound = true)
 @org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
