@@ -605,6 +605,17 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnClass(SpringLiquibase.class)
+    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(prefix = "spring.quartz", name = "enabled", havingValue = "true", matchIfMissing = true)
+    SpringLiquibase ramaStarterQuartzLiquibase(DataSource dataSource) {
+        SpringLiquibase liquibase = new SpringLiquibase();
+        liquibase.setDataSource(dataSource);
+        liquibase.setChangeLog("classpath:db/changelog/rama-spring-quartz.changelog.xml");
+        return liquibase;
+    }
+
+    @Bean
     @ConditionalOnClass(name = "org.apache.commons.net.ftp.FTPClient")
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.ftp", name = "enabled", havingValue = "true")
