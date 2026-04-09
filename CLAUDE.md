@@ -77,6 +77,11 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `rama.ftp.enabled` -- FTP connection manager (default `false`)
 - `rama.security.api-key.enabled` -- API key authentication filter
 
+**Quartz properties** (Spring Boot, not `rama.` prefix):
+- `spring.quartz.enabled` -- Enable/disable Quartz entirely (default `true`). Set to `false` to skip Quartz auto-config, `SchedulerController`, `QuartzService`, and QRTZ_* Liquibase migration
+- The starter provides sensible defaults via `rama-quartz-defaults.properties`: JDBC job-store, clustered mode, `QRTZ_` table prefix, 5 threads. Consumers can override any of these in their `application.properties`
+- `SchedulerController` is conditionally loaded only when `QuartzService` bean exists (which requires a `Scheduler` bean from Quartz auto-config)
+
 **Connection/service properties** (no `rama.` prefix):
 - `meilisearch.host`, `meilisearch.master-key` -- Meilisearch connection
 - `minio.endpoint`, `minio.access-key`, `minio.secret-key` -- MinIO connection
