@@ -71,6 +71,7 @@ import org.rama.service.environment.StaticValueService;
 import org.rama.service.master.MasterIdService;
 import org.rama.service.master.MasterItemService;
 import org.rama.service.system.ClientConfigService;
+import org.rama.controller.system.SchedulerController;
 import org.rama.service.system.QuartzService;
 import org.rama.service.system.SystemLogService;
 import org.rama.service.system.SystemParameterService;
@@ -88,6 +89,7 @@ import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCusto
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -107,6 +109,7 @@ import java.util.Map;
         "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
 })
 @EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class})
+@PropertySource(value = "classpath:rama-quartz-defaults.properties", ignoreResourceNotFound = true)
 @org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
@@ -241,6 +244,13 @@ public class RamaStarterAutoConfiguration {
                 : Collections.emptyList());
         basePackages.addAll(properties.getQuartz().getAllowedJobPackages());
         return new QuartzService(scheduler, basePackages);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(QuartzService.class)
+    SchedulerController schedulerController(QuartzService quartzService, org.springframework.core.env.Environment environment, List<Scheduler> schedulers) {
+        return new SchedulerController(quartzService, environment, schedulers);
     }
 
     @Bean
@@ -593,6 +603,17 @@ public class RamaStarterAutoConfiguration {
         liquibase.setDataSource(dataSource);
         liquibase.setChangeLog(properties.getChangeLog());
         liquibase.setShouldRun(properties.isEnabled());
+        return liquibase;
+    }
+
+    @Bean
+    @ConditionalOnClass(SpringLiquibase.class)
+    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(prefix = "spring.quartz", name = "enabled", havingValue = "true", matchIfMissing = true)
+    SpringLiquibase ramaStarterQuartzLiquibase(DataSource dataSource) {
+        SpringLiquibase liquibase = new SpringLiquibase();
+        liquibase.setDataSource(dataSource);
+        liquibase.setChangeLog("classpath:db/changelog/rama-spring-quartz.changelog.xml");
         return liquibase;
     }
 
