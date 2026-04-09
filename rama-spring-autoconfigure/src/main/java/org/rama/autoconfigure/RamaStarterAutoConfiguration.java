@@ -22,6 +22,7 @@ import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
 import org.rama.ftp.FtpProperties;
+import org.rama.graphql.directive.AuthDirective;
 import org.rama.graphql.directive.EmailConstraint;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
 import org.rama.listener.global.GlobalAuditablePreUpdateListener;
@@ -549,7 +550,9 @@ public class RamaStarterAutoConfiguration {
                 .onValidationErrorStrategy(OnValidationErrorStrategy.RETURN_NULL)
                 .build();
         ValidationSchemaWiring schemaWiring = new ValidationSchemaWiring(validationRules);
+        AuthDirective authDirective = new AuthDirective();
         return wiringBuilder -> wiringBuilder.directiveWiring(schemaWiring)
+                .directiveWiring(authDirective)
                 .scalar(ExtendedScalars.DateTime)
                 .scalar(ExtendedScalars.Json)
                 .scalar(ExtendedScalars.Date)
