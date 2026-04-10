@@ -4,6 +4,8 @@ import graphql.GraphQLError;
 import graphql.GraphqlErrorBuilder;
 import graphql.schema.DataFetchingEnvironment;
 import org.jetbrains.annotations.NotNull;
+import org.rama.graphql.directive.AuthenticationRequiredException;
+import org.rama.graphql.directive.AuthorizationDeniedException;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
@@ -47,6 +49,22 @@ public class StarterGraphqlExceptionResolver extends DataFetcherExceptionResolve
     }
 
     protected List<GraphQLError> resolveCustomErrors(@NotNull Throwable ex, @NotNull DataFetchingEnvironment env) {
+        if (ex instanceof AuthenticationRequiredException) {
+            return Collections.singletonList(GraphqlErrorBuilder.newError()
+                    .errorType(ErrorType.UNAUTHORIZED)
+                    .message(ex.getMessage())
+                    .path(env.getExecutionStepInfo().getPath())
+                    .location(env.getField().getSourceLocation())
+                    .build());
+        }
+        if (ex instanceof AuthorizationDeniedException) {
+            return Collections.singletonList(GraphqlErrorBuilder.newError()
+                    .errorType(ErrorType.FORBIDDEN)
+                    .message(ex.getMessage())
+                    .path(env.getExecutionStepInfo().getPath())
+                    .location(env.getField().getSourceLocation())
+                    .build());
+        }
         return null;
     }
 
