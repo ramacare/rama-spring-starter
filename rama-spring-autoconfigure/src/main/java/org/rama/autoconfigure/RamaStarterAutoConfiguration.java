@@ -22,7 +22,8 @@ import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
 import org.rama.ftp.FtpProperties;
-import org.rama.graphql.directive.AuthDirective;
+import org.rama.graphql.StarterGraphqlExceptionResolver;
+import org.rama.graphql.directive.AuthDirectiveInstrumentation;
 import org.rama.graphql.directive.EmailConstraint;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
 import org.rama.listener.global.GlobalAuditablePreUpdateListener;
@@ -88,12 +89,15 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.boot.graphql.autoconfigure.GraphQlSourceBuilderCustomizer;
+import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
@@ -541,6 +545,14 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnClass(DataFetcherExceptionResolverAdapter.class)
+    @ConditionalOnMissingBean(StarterGraphqlExceptionResolver.class)
+    @ConditionalOnProperty(prefix = "rama.graphql", name = "enabled", havingValue = "true", matchIfMissing = true)
+    StarterGraphqlExceptionResolver starterGraphqlExceptionResolver(Environment environment) {
+        return new StarterGraphqlExceptionResolver(environment);
+    }
+
+    @Bean
     @ConditionalOnClass(RuntimeWiringConfigurer.class)
     @ConditionalOnMissingBean(name = "ramaStarterRuntimeWiringConfigurer")
     @ConditionalOnProperty(prefix = "rama.graphql", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -550,14 +562,20 @@ public class RamaStarterAutoConfiguration {
                 .onValidationErrorStrategy(OnValidationErrorStrategy.RETURN_NULL)
                 .build();
         ValidationSchemaWiring schemaWiring = new ValidationSchemaWiring(validationRules);
-        AuthDirective authDirective = new AuthDirective();
         return wiringBuilder -> wiringBuilder.directiveWiring(schemaWiring)
-                .directiveWiring(authDirective)
                 .scalar(ExtendedScalars.DateTime)
                 .scalar(ExtendedScalars.Json)
                 .scalar(ExtendedScalars.Date)
                 .scalar(ExtendedScalars.GraphQLLong)
                 .build();
+    }
+
+    @Bean
+    @ConditionalOnClass(GraphQlSourceBuilderCustomizer.class)
+    @ConditionalOnMissingBean(name = "ramaStarterAuthDirectiveCustomizer")
+    @ConditionalOnProperty(prefix = "rama.graphql", name = "enabled", havingValue = "true", matchIfMissing = true)
+    GraphQlSourceBuilderCustomizer ramaStarterAuthDirectiveCustomizer() {
+        return builder -> builder.instrumentation(List.of(new AuthDirectiveInstrumentation()));
     }
 
     @Bean

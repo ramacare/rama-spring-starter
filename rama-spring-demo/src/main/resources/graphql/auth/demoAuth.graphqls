@@ -1,0 +1,3 @@
+extend type Mutation {
+    archiveBook(input: BookDeleteInput!): Book @auth(roles: ["ROLE_ADMIN"])
+}

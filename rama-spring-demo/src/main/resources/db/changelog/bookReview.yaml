@@ -1,0 +1,65 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260416-002-book-review
+      author: claude
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            tableExists:
+              tableName: book_review
+      changes:
+        - createTable:
+            tableName: book_review
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(36)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: book_id
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reviewer
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rating
+                  type: INT
+              - column:
+                  name: comment
+                  type: CLOB
+              - column:
+                  name: status_code
+                  type: VARCHAR(50)
+                  defaultValue: active
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+              - column:
+                  name: created_at
+                  type: timestamp
+              - column:
+                  name: updated_at
+                  type: timestamp
+        - addForeignKeyConstraint:
+            baseTableName: book_review
+            baseColumnNames: book_id
+            constraintName: fk_book_review__book_id
+            referencedTableName: book
+            referencedColumnNames: id
+        - createIndex:
+            tableName: book_review
+            indexName: ix_book_review__book_id
+            columns:
+              - column:
+                  name: book_id

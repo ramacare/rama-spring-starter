@@ -53,6 +53,9 @@ encrypt.key=your-encryption-key
 | `rama-spring-core` | Entities, repositories, services, utilities |
 | `rama-spring-autoconfigure` | Auto-configuration, properties, bean wiring |
 | `rama-spring-boot-starter` | Consumer-facing dependency (includes full Spring stack) |
+| `rama-spring-demo` | Reference consumer app + integration tests (not published) |
+
+See [`rama-spring-demo/README.md`](rama-spring-demo/README.md) for a runnable reference consumer app.
 
 ## Build
 

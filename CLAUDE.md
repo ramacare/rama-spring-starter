@@ -24,10 +24,17 @@ Publishing happens via GitHub Actions on tag push. See docs/publishing.md.
 
 **Reusable Spring Boot 4.0.3 starter** for the Rama healthcare platform. Multi-module Maven project under `org.rama` package.
 
+### Demo module
+```bash
+mvn -pl rama-spring-demo spring-boot:run            # Run the demo app locally (GraphiQL at :8080)
+mvn -pl rama-spring-demo -am verify                 # Run the demo's integration tests
+```
+
 ### Modules
 - `rama-spring-core` -- Runtime code: entities, repositories, services, utilities
 - `rama-spring-autoconfigure` -- Spring Boot auto-configuration, properties, bean wiring
 - `rama-spring-boot-starter` -- Consumer-facing dependency bundle (includes full Spring stack)
+- `rama-spring-demo` -- Reference consumer app + end-to-end integration tests (not published)
 
 ### Key Packages (`org.rama.*`)
 - `entity` -- Base types (`Auditable`, `StatusCode`, `Response`), domain entities (`api`, `asset`, `master`, `security`, `system`)

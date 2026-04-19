@@ -53,6 +53,7 @@
         <module>rama-spring-core</module>
         <module>rama-spring-autoconfigure</module>
         <module>rama-spring-boot-starter</module>
+        <module>rama-spring-demo</module>
     </modules>
 
     <properties>
@@ -66,7 +67,8 @@
         <zxing.version>3.5.3</zxing.version>
         <pdfbox.version>3.0.5</pdfbox.version>
         <commons-validator.version>1.10.1</commons-validator.version>
-        <graphql-java.version>24.0</graphql-java.version>
+        <graphql-java-extended-scalars.version>24.0</graphql-java-extended-scalars.version>
+        <graphql-java-extended-validation.version>24.0</graphql-java-extended-validation.version>
         <meilisearch.version>0.15.0</meilisearch.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <maven.javadoc.skip>false</maven.javadoc.skip>

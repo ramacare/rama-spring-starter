@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260416-003-seed-api-keys
+      author: claude
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM api_key WHERE name IN ('demo-user','demo-admin')
+      changes:
+        - insert:
+            tableName: api_key
+            columns:
+              - column: { name: name, value: demo-user }
+              - column: { name: key_hash, value: c508c5bec6c75b75d0e4cce778a48f4bb251ced08f574dffc380f976311f21eb }
+              - column: { name: username, value: demo-user }
+              - column: { name: roles, value: '["ROLE_USER"]' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: created_by, value: seed }
+              - column: { name: updated_by, value: seed }
+              - column: { name: created_at, valueComputed: CURRENT_TIMESTAMP }
+              - column: { name: updated_at, valueComputed: CURRENT_TIMESTAMP }
+        - insert:
+            tableName: api_key
+            columns:
+              - column: { name: name, value: demo-admin }
+              - column: { name: key_hash, value: ac5bb3526d3be432ba19fb1fc0712d350c160bd2169cd24401c9fcaeaac2d860 }
+              - column: { name: username, value: demo-admin }
+              - column: { name: roles, value: '["ROLE_USER","ROLE_ADMIN"]' }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: created_by, value: seed }
+              - column: { name: updated_by, value: seed }
+              - column: { name: created_at, valueComputed: CURRENT_TIMESTAMP }
+              - column: { name: updated_at, valueComputed: CURRENT_TIMESTAMP }

@@ -1,0 +1,64 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260416-001-book
+      author: claude
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            tableExists:
+              tableName: book
+      changes:
+        - createTable:
+            tableName: book
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(36)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: author
+                  type: VARCHAR(200)
+              - column:
+                  name: isbn
+                  type: VARCHAR(20)
+              - column:
+                  name: published_year
+                  type: INT
+              - column:
+                  name: status_code
+                  type: VARCHAR(50)
+                  defaultValue: active
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+              - column:
+                  name: created_at
+                  type: ${timestampType}
+              - column:
+                  name: updated_at
+                  type: ${timestampType}
+        - createIndex:
+            tableName: book
+            indexName: ux_book__isbn
+            unique: true
+            columns:
+              - column:
+                  name: isbn
+        - createIndex:
+            tableName: book
+            indexName: ix_book__status_code
+            columns:
+              - column:
+                  name: status_code
