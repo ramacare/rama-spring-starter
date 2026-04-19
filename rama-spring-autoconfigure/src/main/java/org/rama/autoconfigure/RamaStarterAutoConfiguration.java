@@ -22,6 +22,7 @@ import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
 import org.rama.ftp.FtpProperties;
+import org.rama.graphql.StarterGraphqlExceptionResolver;
 import org.rama.graphql.directive.AuthDirectiveInstrumentation;
 import org.rama.graphql.directive.EmailConstraint;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
@@ -88,6 +89,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
@@ -95,6 +97,7 @@ import org.springframework.core.convert.ConversionService;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.boot.graphql.autoconfigure.GraphQlSourceBuilderCustomizer;
+import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
@@ -539,6 +542,14 @@ public class RamaStarterAutoConfiguration {
                 ? AutoConfigurationPackages.get(beanFactory)
                 : Collections.emptyList();
         return new MeilisearchIndexInitializer(client, meilisearchService, basePackages);
+    }
+
+    @Bean
+    @ConditionalOnClass(DataFetcherExceptionResolverAdapter.class)
+    @ConditionalOnMissingBean(StarterGraphqlExceptionResolver.class)
+    @ConditionalOnProperty(prefix = "rama.graphql", name = "enabled", havingValue = "true", matchIfMissing = true)
+    StarterGraphqlExceptionResolver starterGraphqlExceptionResolver(Environment environment) {
+        return new StarterGraphqlExceptionResolver(environment);
     }
 
     @Bean
