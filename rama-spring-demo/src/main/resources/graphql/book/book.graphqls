@@ -1,0 +1,38 @@
+extend type Query {
+    book(id: ID!): Book
+    books(filter: BookFilter): [Book!]!
+}
+
+extend type Mutation {
+    createBook(input: BookInput!): Book
+    updateBook(input: BookInput!): Book
+    deleteBook(input: BookDeleteInput!): Book
+}
+
+type Book {
+    id: ID!
+    title: String!
+    author: String
+    isbn: String
+    publishedYear: Int
+    statusCode: String
+    createdAt: String
+    createdBy: String
+}
+
+input BookInput {
+    id: ID
+    title: String!
+    author: String
+    isbn: String
+    publishedYear: Int
+}
+
+input BookDeleteInput {
+    id: ID!
+}
+
+input BookFilter {
+    title: String
+    author: String
+}

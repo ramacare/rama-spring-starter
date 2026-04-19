@@ -21,6 +21,8 @@
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
         <openfeign.querydsl.version>7.1</openfeign.querydsl.version>
+        <!-- spring-graphql 2.0.2 requires graphql-java 25; the parent BOM pins 24.0 -->
+        <graphql-java.version>25.0</graphql-java.version>
     </properties>
 
     <dependencies>
