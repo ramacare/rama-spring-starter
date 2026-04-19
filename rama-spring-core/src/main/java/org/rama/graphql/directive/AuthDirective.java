@@ -24,6 +24,11 @@ public class AuthDirective implements SchemaDirectiveWiring {
     public GraphQLFieldDefinition onField(SchemaDirectiveWiringEnvironment<GraphQLFieldDefinition> environment) {
         GraphQLFieldDefinition field = environment.getFieldDefinition();
         GraphQLAppliedDirective directive = environment.getAppliedDirective();
+        // When this SchemaDirectiveWiring is registered unnamed via RuntimeWiring.directiveWiring(...),
+        // graphql-java invokes it for every field — including those without @auth. Bail out cleanly.
+        if (directive == null) {
+            return field;
+        }
         GraphQLObjectType parentType = (GraphQLObjectType) environment.getFieldsContainer();
 
         List<String> roles = extractRoles(directive);
@@ -44,6 +49,10 @@ public class AuthDirective implements SchemaDirectiveWiring {
     public GraphQLObjectType onObject(SchemaDirectiveWiringEnvironment<GraphQLObjectType> environment) {
         GraphQLObjectType objectType = environment.getElement();
         GraphQLAppliedDirective directive = environment.getAppliedDirective();
+        // See comment in onField — skip object types that don't have @auth applied.
+        if (directive == null) {
+            return objectType;
+        }
 
         List<String> roles = extractRoles(directive);
         String match = extractMatch(directive);
