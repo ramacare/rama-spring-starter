@@ -552,7 +552,7 @@ public class RamaStarterAutoConfiguration {
         ValidationSchemaWiring schemaWiring = new ValidationSchemaWiring(validationRules);
         AuthDirective authDirective = new AuthDirective();
         return wiringBuilder -> wiringBuilder.directiveWiring(schemaWiring)
-                .directiveWiring(authDirective)
+                .directive("auth", authDirective)
                 .scalar(ExtendedScalars.DateTime)
                 .scalar(ExtendedScalars.Json)
                 .scalar(ExtendedScalars.Date)

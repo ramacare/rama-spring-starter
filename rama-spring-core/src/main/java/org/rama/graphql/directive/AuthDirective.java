@@ -20,12 +20,12 @@ import java.util.List;
 @Slf4j
 public class AuthDirective implements SchemaDirectiveWiring {
 
+    private static final String DIRECTIVE_NAME = "auth";
+
     @Override
     public GraphQLFieldDefinition onField(SchemaDirectiveWiringEnvironment<GraphQLFieldDefinition> environment) {
         GraphQLFieldDefinition field = environment.getFieldDefinition();
-        GraphQLAppliedDirective directive = environment.getAppliedDirective();
-        // When this SchemaDirectiveWiring is registered unnamed via RuntimeWiring.directiveWiring(...),
-        // graphql-java invokes it for every field — including those without @auth. Bail out cleanly.
+        GraphQLAppliedDirective directive = field.getAppliedDirective(DIRECTIVE_NAME);
         if (directive == null) {
             return field;
         }
@@ -48,8 +48,7 @@ public class AuthDirective implements SchemaDirectiveWiring {
     @Override
     public GraphQLObjectType onObject(SchemaDirectiveWiringEnvironment<GraphQLObjectType> environment) {
         GraphQLObjectType objectType = environment.getElement();
-        GraphQLAppliedDirective directive = environment.getAppliedDirective();
-        // See comment in onField — skip object types that don't have @auth applied.
+        GraphQLAppliedDirective directive = objectType.getAppliedDirective(DIRECTIVE_NAME);
         if (directive == null) {
             return objectType;
         }

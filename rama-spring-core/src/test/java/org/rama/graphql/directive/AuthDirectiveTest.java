@@ -163,9 +163,29 @@ class AuthDirectiveTest {
         SchemaDirectiveWiringEnvironment<GraphQLFieldDefinition> environment =
                 mock(SchemaDirectiveWiringEnvironment.class);
 
+        // Build a real @auth applied directive with roles and match arguments
+        GraphQLAppliedDirective.Builder directiveBuilder = GraphQLAppliedDirective.newDirective()
+                .name("auth");
+
+        if (!roles.isEmpty()) {
+            directiveBuilder.argument(GraphQLAppliedDirectiveArgument.newArgument()
+                    .name("roles")
+                    .type(graphql.schema.GraphQLList.list(graphql.Scalars.GraphQLString))
+                    .valueProgrammatic(roles)
+                    .build());
+        }
+        directiveBuilder.argument(GraphQLAppliedDirectiveArgument.newArgument()
+                .name("match")
+                .type(graphql.Scalars.GraphQLString)
+                .valueProgrammatic(match)
+                .build());
+
+        GraphQLAppliedDirective authApplied = directiveBuilder.build();
+
         GraphQLFieldDefinition fieldDefinition = GraphQLFieldDefinition.newFieldDefinition()
                 .name("testField")
                 .type(graphql.Scalars.GraphQLString)
+                .withAppliedDirective(authApplied)
                 .build();
 
         GraphQLObjectType parentType = GraphQLObjectType.newObject()
@@ -176,27 +196,10 @@ class AuthDirectiveTest {
         // Rebuild field from parentType so it's the same instance
         fieldDefinition = parentType.getFieldDefinition("testField");
 
-        GraphQLAppliedDirective directive = mock(GraphQLAppliedDirective.class);
-
-        // Set up roles argument
-        if (roles.isEmpty()) {
-            when(directive.getArgument("roles")).thenReturn(null);
-        } else {
-            GraphQLAppliedDirectiveArgument rolesArg = mock(GraphQLAppliedDirectiveArgument.class);
-            when(rolesArg.getValue()).thenReturn(roles);
-            when(directive.getArgument("roles")).thenReturn(rolesArg);
-        }
-
-        // Set up match argument (lenient because not all paths read the match argument)
-        GraphQLAppliedDirectiveArgument matchArg = mock(GraphQLAppliedDirectiveArgument.class);
-        org.mockito.Mockito.lenient().when(matchArg.getValue()).thenReturn(match);
-        org.mockito.Mockito.lenient().when(directive.getArgument("match")).thenReturn(matchArg);
-
         GraphQLCodeRegistry.Builder codeRegistryBuilder = GraphQLCodeRegistry.newCodeRegistry();
         codeRegistryBuilder.dataFetcher(parentType, fieldDefinition, originalFetcher);
 
         when(environment.getFieldDefinition()).thenReturn(fieldDefinition);
-        when(environment.getAppliedDirective()).thenReturn(directive);
         when(environment.getFieldsContainer()).thenReturn(parentType);
         when(environment.getCodeRegistry()).thenReturn(codeRegistryBuilder);
 
