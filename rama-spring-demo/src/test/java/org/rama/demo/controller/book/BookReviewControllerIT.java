@@ -10,12 +10,7 @@ import org.rama.repository.revision.RevisionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.graphql.test.autoconfigure.tester.AutoConfigureHttpGraphQlTester;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.graphql.test.tester.HttpGraphQlTester;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -27,19 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("h2")
 @AutoConfigureHttpGraphQlTester
-@Import(BookReviewControllerIT.PermitAllSecurityConfig.class)
 class BookReviewControllerIT {
-
-    @TestConfiguration
-    static class PermitAllSecurityConfig {
-        @Bean
-        SecurityFilterChain testSecurityFilterChain(HttpSecurity http) throws Exception {
-            http
-                    .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                    .csrf(csrf -> csrf.disable());
-            return http.build();
-        }
-    }
 
     @Autowired HttpGraphQlTester graphQlTester;
     @Autowired BookRepository bookRepository;

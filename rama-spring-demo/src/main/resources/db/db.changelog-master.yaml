@@ -5,5 +5,5 @@ databaseChangeLog:
       file: db/changelog/book.yaml
   - include:
       file: db/changelog/bookReview.yaml
-  # - include:
-  #     file: db/changelog/seed-apiKey.yaml
+  - include:
+      file: db/changelog/seed-apiKey.yaml
