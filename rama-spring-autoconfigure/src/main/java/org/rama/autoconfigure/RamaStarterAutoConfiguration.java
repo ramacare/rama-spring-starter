@@ -23,6 +23,7 @@ import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
 import org.rama.ftp.FtpProperties;
 import org.rama.graphql.directive.AuthDirective;
+import org.rama.graphql.directive.AuthDirectiveInstrumentation;
 import org.rama.graphql.directive.EmailConstraint;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
 import org.rama.listener.global.GlobalAuditablePreUpdateListener;
@@ -94,6 +95,7 @@ import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.boot.graphql.autoconfigure.GraphQlSourceBuilderCustomizer;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
@@ -550,14 +552,20 @@ public class RamaStarterAutoConfiguration {
                 .onValidationErrorStrategy(OnValidationErrorStrategy.RETURN_NULL)
                 .build();
         ValidationSchemaWiring schemaWiring = new ValidationSchemaWiring(validationRules);
-        AuthDirective authDirective = new AuthDirective();
         return wiringBuilder -> wiringBuilder.directiveWiring(schemaWiring)
-                .directive("auth", authDirective)
                 .scalar(ExtendedScalars.DateTime)
                 .scalar(ExtendedScalars.Json)
                 .scalar(ExtendedScalars.Date)
                 .scalar(ExtendedScalars.GraphQLLong)
                 .build();
+    }
+
+    @Bean
+    @ConditionalOnClass(GraphQlSourceBuilderCustomizer.class)
+    @ConditionalOnMissingBean(name = "ramaStarterAuthDirectiveCustomizer")
+    @ConditionalOnProperty(prefix = "rama.graphql", name = "enabled", havingValue = "true", matchIfMissing = true)
+    GraphQlSourceBuilderCustomizer ramaStarterAuthDirectiveCustomizer() {
+        return builder -> builder.instrumentation(List.of(new AuthDirectiveInstrumentation()));
     }
 
     @Bean
