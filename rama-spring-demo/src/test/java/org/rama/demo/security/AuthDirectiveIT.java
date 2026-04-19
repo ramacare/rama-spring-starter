@@ -24,7 +24,7 @@ class AuthDirectiveIT {
     @Autowired TransactionTemplate transactionTemplate;
 
     @Test
-    void archiveBook_withoutAuth_shouldFail() {
+    void archiveBook_withoutAuth_shouldReturnUnauthorized() {
         Book b = transactionTemplate.execute(s -> bookRepository.saveAndFlush(new Book("anon archive")));
         graphQlTester.document("""
                 mutation($id: ID!) { archiveBook(input: {id: $id}) { id } }
@@ -32,11 +32,14 @@ class AuthDirectiveIT {
                 .variable("id", b.getId())
                 .execute()
                 .errors()
-                .satisfy(errors -> assertThat(errors).isNotEmpty());
+                .satisfy(errors -> {
+                    assertThat(errors).isNotEmpty();
+                    assertThat(errors.getFirst().getMessage()).contains("Authentication is required");
+                });
     }
 
     @Test
-    void archiveBook_withUserRole_shouldFail() {
+    void archiveBook_withUserRole_shouldReturnForbidden() {
         Book b = transactionTemplate.execute(s -> bookRepository.saveAndFlush(new Book("user archive")));
         graphQlTester.mutate().headers(h -> h.set("X-API-KEY", "demo-user-key")).build()
                 .document("""
@@ -45,7 +48,10 @@ class AuthDirectiveIT {
                 .variable("id", b.getId())
                 .execute()
                 .errors()
-                .satisfy(errors -> assertThat(errors).isNotEmpty());
+                .satisfy(errors -> {
+                    assertThat(errors).isNotEmpty();
+                    assertThat(errors.getFirst().getMessage()).contains("Access denied");
+                });
     }
 
     @Test

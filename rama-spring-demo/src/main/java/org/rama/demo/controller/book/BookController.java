@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.rama.demo.entity.book.Book;
 import org.rama.demo.repository.book.BookRepository;
 import org.rama.entity.StatusCode;
+import org.rama.graphql.directive.AuthenticationRequiredException;
+import org.rama.graphql.directive.AuthorizationDeniedException;
 import org.rama.service.GenericEntityService;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -59,12 +61,12 @@ public class BookController {
     public Optional<Book> archiveBook(@Argument Map<String, Object> input) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
-            throw new IllegalStateException("Authentication is required to access archiveBook");
+            throw new AuthenticationRequiredException("Authentication is required to access archiveBook");
         }
         boolean hasAdmin = auth.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         if (!hasAdmin) {
-            throw new IllegalStateException("Access denied. Required role: ROLE_ADMIN");
+            throw new AuthorizationDeniedException("Access denied. Required role: ROLE_ADMIN");
         }
         String id = Objects.toString(input.get("id"), null);
         if (id == null) throw new IllegalArgumentException("archiveBook requires input.id");
