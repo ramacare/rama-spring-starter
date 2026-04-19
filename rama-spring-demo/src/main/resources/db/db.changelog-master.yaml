@@ -3,7 +3,7 @@ databaseChangeLog:
       file: db/changelog/rama-spring-starter-master.yaml
   - include:
       file: db/changelog/book.yaml
-  # - include:
-  #     file: db/changelog/bookReview.yaml
+  - include:
+      file: db/changelog/bookReview.yaml
   # - include:
   #     file: db/changelog/seed-apiKey.yaml

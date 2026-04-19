@@ -1,0 +1,21 @@
+extend type Mutation {
+    createBookReview(input: BookReviewInput!): BookReview
+    updateBookReview(input: BookReviewInput!): BookReview
+}
+
+type BookReview {
+    id: ID!
+    bookId: ID!
+    reviewer: String!
+    rating: Int
+    comment: String
+    statusCode: String
+}
+
+input BookReviewInput {
+    id: ID
+    bookId: ID
+    reviewer: String
+    rating: Int
+    comment: String
+}
