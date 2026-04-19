@@ -9,6 +9,7 @@ import graphql.schema.GraphQLAppliedDirectiveArgument;
 import graphql.schema.GraphQLFieldDefinition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +25,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @Tag("unit")
@@ -51,128 +54,285 @@ class AuthDirectiveInstrumentationTest {
         SecurityContextHolder.clearContext();
     }
 
-    @Test
-    void instrumentDataFetcher_whenNoAuthDirective_shouldReturnOriginalFetcher() {
-        GraphQLFieldDefinition field = GraphQLFieldDefinition.newFieldDefinition()
-                .name("testField")
-                .type(graphql.Scalars.GraphQLString)
-                .build();
+    @Nested
+    class NoAuthDirective {
 
-        InstrumentationFieldFetchParameters params = mockParams(field);
-        DataFetcher<?> result = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+        @Test
+        void shouldReturnOriginalFetcherUnchanged() {
+            GraphQLFieldDefinition field = GraphQLFieldDefinition.newFieldDefinition()
+                    .name("publicField")
+                    .type(graphql.Scalars.GraphQLString)
+                    .build();
 
-        assertThat(result).isSameAs(originalFetcher);
+            InstrumentationFieldFetchParameters params = mockParams(field);
+            DataFetcher<?> result = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThat(result).isSameAs(originalFetcher);
+        }
+
+        @Test
+        void shouldNotCheckSecurityContext() throws Exception {
+            GraphQLFieldDefinition field = GraphQLFieldDefinition.newFieldDefinition()
+                    .name("publicField")
+                    .type(graphql.Scalars.GraphQLString)
+                    .build();
+
+            InstrumentationFieldFetchParameters params = mockParams(field);
+            DataFetcher<?> result = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("public data");
+
+            Object value = result.get(dataFetchingEnvironment);
+
+            assertThat(value).isEqualTo("public data");
+            verify(originalFetcher).get(dataFetchingEnvironment);
+        }
     }
 
-    @Test
-    void instrumentDataFetcher_whenNotAuthenticated_shouldThrowAuthenticationRequired() {
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN"), "ANY");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+    @Nested
+    class AuthDirectiveWithoutRoles {
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+        @Test
+        void whenNotAuthenticated_shouldThrowAuthenticationRequired() {
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of(), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
-                .isInstanceOf(AuthenticationRequiredException.class)
-                .hasMessageContaining("Authentication is required");
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthenticationRequiredException.class)
+                    .hasMessageContaining("Authentication is required");
+            verifyNoInteractions(originalFetcher);
+        }
+
+        @Test
+        void whenAnonymousUser_shouldThrowAuthenticationRequired() {
+            SecurityContextHolder.getContext().setAuthentication(
+                    new AnonymousAuthenticationToken("key", "anonymous",
+                            List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS")))
+            );
+
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of(), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthenticationRequiredException.class);
+            verifyNoInteractions(originalFetcher);
+        }
+
+        @Test
+        void whenAuthenticated_shouldCallOriginalFetcher() throws Exception {
+            setAuthenticated("user", "ROLE_USER");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("authenticated data");
+
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of(), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+            Object result = wrapped.get(dataFetchingEnvironment);
+
+            assertThat(result).isEqualTo("authenticated data");
+            verify(originalFetcher).get(dataFetchingEnvironment);
+        }
     }
 
-    @Test
-    void instrumentDataFetcher_whenAnonymous_shouldThrowAuthenticationRequired() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new AnonymousAuthenticationToken("key", "anonymous",
-                        List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS")))
-        );
+    @Nested
+    class AuthDirectiveWithSingleRole {
 
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of(), "ANY");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+        @Test
+        void whenHasExactRole_shouldCallOriginalFetcher() throws Exception {
+            setAuthenticated("admin", "ROLE_ADMIN");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("admin data");
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN"), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
-                .isInstanceOf(AuthenticationRequiredException.class);
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+            Object result = wrapped.get(dataFetchingEnvironment);
+
+            assertThat(result).isEqualTo("admin data");
+        }
+
+        @Test
+        void whenRoleWithoutPrefix_shouldMatchPrefixedAuthority() throws Exception {
+            setAuthenticated("admin", "ROLE_ADMIN");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("admin data");
+
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ADMIN"), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+            Object result = wrapped.get(dataFetchingEnvironment);
+
+            assertThat(result).isEqualTo("admin data");
+        }
+
+        @Test
+        void whenMissingRole_shouldThrowAuthorizationDenied() {
+            setAuthenticated("user", "ROLE_USER");
+
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN"), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthorizationDeniedException.class)
+                    .hasMessageContaining("Access denied")
+                    .hasMessageContaining("ROLE_ADMIN");
+            verifyNoInteractions(originalFetcher);
+        }
+
+        @Test
+        void whenNotAuthenticated_shouldThrowAuthenticationNotAuthorization() {
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN"), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthenticationRequiredException.class);
+        }
     }
 
-    @Test
-    void instrumentDataFetcher_whenAuthenticatedNoRoles_shouldCallOriginal() throws Exception {
-        setAuthenticated("user", "ROLE_USER");
-        when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
+    @Nested
+    class AuthDirectiveWithMultipleRolesAny {
 
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of(), "ANY");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+        @Test
+        void whenHasFirstRole_shouldSucceed() throws Exception {
+            setAuthenticated("admin", "ROLE_ADMIN");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
-        Object result = wrapped.get(dataFetchingEnvironment);
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThat(result).isEqualTo("result");
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThat(wrapped.get(dataFetchingEnvironment)).isEqualTo("result");
+        }
+
+        @Test
+        void whenHasSecondRole_shouldSucceed() throws Exception {
+            setAuthenticated("doctor", "ROLE_DOCTOR");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
+
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThat(wrapped.get(dataFetchingEnvironment)).isEqualTo("result");
+        }
+
+        @Test
+        void whenHasNeitherRole_shouldThrowAuthorizationDenied() {
+            setAuthenticated("nurse", "ROLE_NURSE");
+
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ANY");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthorizationDeniedException.class);
+        }
+
+        @Test
+        void defaultMatchMode_shouldBeAny() throws Exception {
+            setAuthenticated("admin", "ROLE_ADMIN");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
+
+            GraphQLFieldDefinition field = buildFieldWithAuthNoMatch(List.of("ROLE_ADMIN", "ROLE_DOCTOR"));
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThat(wrapped.get(dataFetchingEnvironment)).isEqualTo("result");
+        }
     }
 
-    @Test
-    void instrumentDataFetcher_whenHasMatchingRole_shouldCallOriginal() throws Exception {
-        setAuthenticated("admin", "ROLE_ADMIN");
-        when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
+    @Nested
+    class AuthDirectiveWithMultipleRolesAll {
 
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN"), "ANY");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+        @Test
+        void whenHasAllRoles_shouldSucceed() throws Exception {
+            setAuthenticated("superuser", "ROLE_ADMIN", "ROLE_DOCTOR");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
-        Object result = wrapped.get(dataFetchingEnvironment);
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ALL");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThat(result).isEqualTo("result");
-    }
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
 
-    @Test
-    void instrumentDataFetcher_whenMissingRole_shouldThrowAuthorizationDenied() {
-        setAuthenticated("user", "ROLE_USER");
+            assertThat(wrapped.get(dataFetchingEnvironment)).isEqualTo("result");
+        }
 
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN"), "ANY");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+        @Test
+        void whenHasOnlyFirstRole_shouldThrowAuthorizationDenied() {
+            setAuthenticated("admin", "ROLE_ADMIN");
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ALL");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessageContaining("Access denied");
-    }
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
 
-    @Test
-    void instrumentDataFetcher_whenMatchAll_andHasAllRoles_shouldCallOriginal() throws Exception {
-        setAuthenticated("admin", "ROLE_ADMIN", "ROLE_DOCTOR");
-        when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthorizationDeniedException.class)
+                    .hasMessageContaining("ALL");
+        }
 
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ALL");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+        @Test
+        void whenHasOnlySecondRole_shouldThrowAuthorizationDenied() {
+            setAuthenticated("doctor", "ROLE_DOCTOR");
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
-        Object result = wrapped.get(dataFetchingEnvironment);
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ALL");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThat(result).isEqualTo("result");
-    }
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
 
-    @Test
-    void instrumentDataFetcher_whenMatchAll_andMissingOneRole_shouldThrowAuthorizationDenied() {
-        setAuthenticated("user", "ROLE_DOCTOR");
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthorizationDeniedException.class);
+        }
 
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ALL");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+        @Test
+        void whenHasNoRoles_shouldThrowAuthorizationDenied() {
+            setAuthenticated("user", "ROLE_USER");
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ALL");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
-                .isInstanceOf(AuthorizationDeniedException.class);
-    }
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
 
-    @Test
-    void instrumentDataFetcher_whenRoleWithoutPrefix_shouldMatchPrefixed() throws Exception {
-        setAuthenticated("admin", "ROLE_ADMIN");
-        when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
+            assertThatThrownBy(() -> wrapped.get(dataFetchingEnvironment))
+                    .isInstanceOf(AuthorizationDeniedException.class);
+        }
 
-        GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ADMIN"), "ANY");
-        InstrumentationFieldFetchParameters params = mockParams(field);
+        @Test
+        void whenHasAllRolesAndMore_shouldSucceed() throws Exception {
+            setAuthenticated("superuser", "ROLE_ADMIN", "ROLE_DOCTOR", "ROLE_NURSE");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
 
-        DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
-        Object result = wrapped.get(dataFetchingEnvironment);
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "ALL");
+            InstrumentationFieldFetchParameters params = mockParams(field);
 
-        assertThat(result).isEqualTo("result");
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThat(wrapped.get(dataFetchingEnvironment)).isEqualTo("result");
+        }
+
+        @Test
+        void matchAll_caseInsensitive_shouldWork() throws Exception {
+            setAuthenticated("superuser", "ROLE_ADMIN", "ROLE_DOCTOR");
+            when(originalFetcher.get(dataFetchingEnvironment)).thenReturn("result");
+
+            GraphQLFieldDefinition field = buildFieldWithAuth(List.of("ROLE_ADMIN", "ROLE_DOCTOR"), "all");
+            InstrumentationFieldFetchParameters params = mockParams(field);
+
+            DataFetcher<?> wrapped = instrumentation.instrumentDataFetcher(originalFetcher, params, instrumentationState);
+
+            assertThat(wrapped.get(dataFetchingEnvironment)).isEqualTo("result");
+        }
     }
 
     // --- helpers ---
@@ -202,6 +362,25 @@ class AuthDirectiveInstrumentationTest {
                 .type(graphql.Scalars.GraphQLString)
                 .valueProgrammatic(match)
                 .build());
+
+        return GraphQLFieldDefinition.newFieldDefinition()
+                .name("testField")
+                .type(graphql.Scalars.GraphQLString)
+                .withAppliedDirective(directiveBuilder.build())
+                .build();
+    }
+
+    private GraphQLFieldDefinition buildFieldWithAuthNoMatch(List<String> roles) {
+        GraphQLAppliedDirective.Builder directiveBuilder = GraphQLAppliedDirective.newDirective()
+                .name("auth");
+
+        if (!roles.isEmpty()) {
+            directiveBuilder.argument(GraphQLAppliedDirectiveArgument.newArgument()
+                    .name("roles")
+                    .type(graphql.schema.GraphQLList.list(graphql.Scalars.GraphQLString))
+                    .valueProgrammatic(roles)
+                    .build());
+        }
 
         return GraphQLFieldDefinition.newFieldDefinition()
                 .name("testField")

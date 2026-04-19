@@ -22,7 +22,6 @@ import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
 import org.rama.ftp.FtpProperties;
-import org.rama.graphql.directive.AuthDirective;
 import org.rama.graphql.directive.AuthDirectiveInstrumentation;
 import org.rama.graphql.directive.EmailConstraint;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
