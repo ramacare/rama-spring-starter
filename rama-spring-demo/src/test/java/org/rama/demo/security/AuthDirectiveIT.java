@@ -34,7 +34,7 @@ class AuthDirectiveIT {
                 .errors()
                 .satisfy(errors -> {
                     assertThat(errors).isNotEmpty();
-                    assertThat(errors.getFirst().getMessage()).contains("Authentication is required");
+                    assertThat(errors.get(0).getMessage()).contains("Authentication is required");
                 });
     }
 
@@ -50,7 +50,7 @@ class AuthDirectiveIT {
                 .errors()
                 .satisfy(errors -> {
                     assertThat(errors).isNotEmpty();
-                    assertThat(errors.getFirst().getMessage()).contains("Access denied");
+                    assertThat(errors.get(0).getMessage()).contains("Access denied");
                 });
     }
 
