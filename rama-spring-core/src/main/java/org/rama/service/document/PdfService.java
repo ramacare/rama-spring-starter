@@ -132,7 +132,8 @@ public class PdfService {
 
                     stream.beginText();
                     stream.setFont(font, fontSize);
-                    stream.setNonStrokingColor(color.getRed(), color.getGreen(), color.getBlue());
+                    // PDFBox 3.x removed setNonStrokingColor(int,int,int); pass Color directly
+                    stream.setNonStrokingColor(color);
                     stream.setTextMatrix(Matrix.getRotateInstance(angle, centerX, centerY));
                     float lineHeight = fontSize * 1.2f;
                     float startOffset = ((lines.length - 1) * lineHeight) / 2f;
