@@ -113,7 +113,8 @@ import java.util.Map;
 
 @AutoConfiguration(afterName = {
         "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration",
-        "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
+        "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration",
+        "org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration"
 })
 @EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class})
 @PropertySource(value = "classpath:rama-quartz-defaults.properties", ignoreResourceNotFound = true)
