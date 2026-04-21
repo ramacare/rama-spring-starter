@@ -31,7 +31,7 @@ public class MasterHooks implements ReplacementObjectHook {
     }
 
     private String render(String groupKey, String itemCode, String lang, boolean showCode) {
-        String translated = masterItemService.translateMaster(groupKey, itemCode, lang);
+        String translated = masterItemService.translateMasterWithTerminated(groupKey, itemCode, lang);
         return showCode ? itemCode + "-" + translated : translated;
     }
 
