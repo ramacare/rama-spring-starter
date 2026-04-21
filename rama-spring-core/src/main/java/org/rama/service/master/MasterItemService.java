@@ -1,6 +1,9 @@
 package org.rama.service.master;
 
+import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.rama.entity.master.MasterItem;
+import org.rama.entity.master.QMasterItem;
 import org.rama.repository.master.MasterItemRepository;
 
 import java.time.Duration;
@@ -12,11 +15,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MasterItemService {
     private final MasterItemRepository masterItemRepository;
+    private final JPAQueryFactory queryFactory;
     private final Map<String, CachedItem> itemCache = new ConcurrentHashMap<>();
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
-    public MasterItemService(MasterItemRepository masterItemRepository) {
+    public MasterItemService(MasterItemRepository masterItemRepository, JPAQueryFactory queryFactory) {
         this.masterItemRepository = masterItemRepository;
+        this.queryFactory = queryFactory;
     }
 
     public MasterItem getMasterItem(String groupKey, String itemCode) {
@@ -54,6 +59,10 @@ public class MasterItemService {
         return "EN".equalsIgnoreCase(lang) ? item.getItemValueAlternative() : item.getItemValue();
     }
 
+    public String translateMasterWithTerminated(String groupKey, String itemCode) {
+        return translateMasterWithTerminated(groupKey, itemCode, "TH");
+    }
+
     public String translateMasterWithTerminated(String groupKey, String itemCode, String lang) {
         MasterItem item = getMasterItemWithTerminated(groupKey, itemCode);
         if (item == null) {
@@ -66,20 +75,16 @@ public class MasterItemService {
         if (itemValue == null || groupKey == null) {
             return null;
         }
-
-        List<MasterItem> items = getMasterItems(groupKey);
-        String result = null;
-        for (MasterItem item : items) {
-            boolean valueMatches = itemValue.equals(item.getItemValue()) || itemValue.equals(item.getItemValueAlternative());
-            if (!valueMatches) {
-                continue;
-            }
-            if (filterText != null && !filterText.equals(item.getFilterText())) {
-                continue;
-            }
-            result = item.getItemCode();
+        QMasterItem q = QMasterItem.masterItem;
+        BooleanExpression predicate = q.groupKey.eq(groupKey)
+                .and(q.itemValue.eq(itemValue).or(q.itemValueAlternative.eq(itemValue)));
+        if (filterText != null) {
+            predicate = predicate.and(q.filterText.eq(filterText));
         }
-        return result;
+        return queryFactory.select(q.itemCode).from(q)
+                .where(predicate)
+                .orderBy(q.id.desc())
+                .fetchFirst();
     }
 
     public void evictCache() {

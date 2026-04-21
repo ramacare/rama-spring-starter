@@ -3,6 +3,8 @@ package org.rama.autoconfigure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Config;
+import com.querydsl.jpa.impl.JPAQueryFactory;
+import jakarta.persistence.EntityManager;
 import graphql.scalars.ExtendedScalars;
 import graphql.validation.rules.OnValidationErrorStrategy;
 import graphql.validation.rules.ValidationRules;
@@ -206,9 +208,15 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    JPAQueryFactory jpaQueryFactory(EntityManager entityManager) {
+        return new JPAQueryFactory(entityManager);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     @ConditionalOnBean(MasterItemRepository.class)
-    MasterItemService masterItemService(MasterItemRepository masterItemRepository) {
-        return new MasterItemService(masterItemRepository);
+    MasterItemService masterItemService(MasterItemRepository masterItemRepository, JPAQueryFactory queryFactory) {
+        return new MasterItemService(masterItemRepository, queryFactory);
     }
 
     @Bean
