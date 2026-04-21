@@ -238,10 +238,22 @@ databaseChangeLog:
         indexExists:
           indexName: ux_master_id__id_type_prefix
     changes:
-    - dropIndex:
-        tableName: master_id
-        indexName: ix_master_id__id_type_prefix
     - addUniqueConstraint:
         tableName: master_id
         constraintName: ux_master_id__id_type_prefix
         columnNames: id_type, prefix
+- changeSet:
+    id: rama-spring-master-005-master-id-drop-legacy-prefix-index
+    author: claude
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: master_id
+    - indexExists:
+        indexName: ix_master_id__id_type_prefix
+    changes:
+    - dropIndex:
+        tableName: master_id
+        indexName: ix_master_id__id_type_prefix
