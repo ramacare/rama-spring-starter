@@ -30,6 +30,10 @@ public class MasterItemService {
         return item;
     }
 
+    public MasterItem getMasterItemWithTerminated(String groupKey, String itemCode) {
+        return masterItemRepository.findMasterItemByGroupKeyAndItemCodeWithTerminated(groupKey, itemCode).orElse(null);
+    }
+
     public List<MasterItem> getMasterItems(String groupKey) {
         return masterItemRepository.findMasterItemByGroupKeyOrderByOrderingAndItemCodeAsc(groupKey);
     }
@@ -44,6 +48,14 @@ public class MasterItemService {
 
     public String translateMaster(String groupKey, String itemCode, String lang) {
         MasterItem item = getMasterItem(groupKey, itemCode);
+        if (item == null) {
+            return "";
+        }
+        return "EN".equalsIgnoreCase(lang) ? item.getItemValueAlternative() : item.getItemValue();
+    }
+
+    public String translateMasterWithTerminated(String groupKey, String itemCode, String lang) {
+        MasterItem item = getMasterItemWithTerminated(groupKey, itemCode);
         if (item == null) {
             return "";
         }
