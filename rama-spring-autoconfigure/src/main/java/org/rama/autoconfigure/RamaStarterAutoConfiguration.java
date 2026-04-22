@@ -27,6 +27,7 @@ import org.rama.ftp.FtpProperties;
 import org.rama.graphql.StarterGraphqlExceptionResolver;
 import org.rama.graphql.directive.AuthDirectiveInstrumentation;
 import org.rama.graphql.directive.EmailConstraint;
+import org.rama.graphql.instrumentation.LenientStringVariableInstrumentation;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
 import org.rama.listener.global.GlobalAuditablePreUpdateListener;
 import org.rama.listener.global.GlobalPostInsertRevisionListener;
@@ -585,6 +586,20 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnProperty(prefix = "rama.graphql", name = "enabled", havingValue = "true", matchIfMissing = true)
     GraphQlSourceBuilderCustomizer ramaStarterAuthDirectiveCustomizer() {
         return builder -> builder.instrumentation(List.of(new AuthDirectiveInstrumentation()));
+    }
+
+    // graphql-java 22+ rejects non-String raw values for String variables. The
+    // built-in String scalar can't be overridden (graphql-java 25 fails schema
+    // build with "You have redefined the type 'String'"), so we pre-coerce
+    // Number / Boolean / Character variables to their toString form when the
+    // query declares them as String. Defaults on; disable with
+    // rama.graphql.lenient-string-coercion=false if clients are already spec-clean.
+    @Bean
+    @ConditionalOnClass(GraphQlSourceBuilderCustomizer.class)
+    @ConditionalOnMissingBean(name = "ramaStarterLenientStringVariableCustomizer")
+    @ConditionalOnProperty(prefix = "rama.graphql", name = "lenient-string-coercion", havingValue = "true", matchIfMissing = true)
+    GraphQlSourceBuilderCustomizer ramaStarterLenientStringVariableCustomizer() {
+        return builder -> builder.instrumentation(List.of(new LenientStringVariableInstrumentation()));
     }
 
     @Bean
