@@ -40,15 +40,26 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public abstract class AbstractSignService {
+    /**
+     * Classpath path to the THSarabunNew TTF bundled with the starter.
+     * Used when no fontPath is supplied to the constructor.
+     */
+    public static final String DEFAULT_FONT_RESOURCE = "/org/rama/fonts/THSarabunNew.ttf";
+
     private final ITSAClient tsaClient;
     private final HttpTsaConfiguration httpTsaConfiguration;
     private final byte[] fontBytes;
     private final byte[] logoBytes;
 
+    protected AbstractSignService(ITSAClient tsaClient, HttpTsaConfiguration httpTsaConfiguration, String logoPath) {
+        this(tsaClient, httpTsaConfiguration, DEFAULT_FONT_RESOURCE, logoPath);
+    }
+
     protected AbstractSignService(ITSAClient tsaClient, HttpTsaConfiguration httpTsaConfiguration, String fontPath, String logoPath) {
         this.tsaClient = tsaClient;
         this.httpTsaConfiguration = httpTsaConfiguration;
-        this.fontBytes = readClasspathBytesQuiet(fontPath);
+        String effectiveFontPath = (fontPath == null || fontPath.isBlank()) ? DEFAULT_FONT_RESOURCE : fontPath;
+        this.fontBytes = readClasspathBytesQuiet(effectiveFontPath);
         this.logoBytes = readClasspathBytesQuiet(logoPath);
     }
 
