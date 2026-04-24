@@ -213,6 +213,65 @@ Placeholder syntax: `{{key;attribute1="value1";attribute2="value2"}}`
 
 Built-in attributes: `image`, `qrcode`, `barcode39`, `barcode128`, `html`, `checkbox`, `datetime`, `date`, `time`, `master`, `join`, `prefix`, `suffix`, `if`, `else`, `ifempty`
 
+### PDF Watermarking
+
+`PdfService.addWatermarkBytesBlocking` stamps a diagonal, semi-transparent, centered watermark on every page using iText 8 plus the bundled THSarabunNew font — so Thai text renders correctly out of the box.
+
+Overloads:
+
+```java
+// Defaults: 96pt, DeviceGray at 0.5 opacity
+byte[] out = pdfService.addWatermarkBytesBlocking(pdfBytes, "ตัวอย่าง");
+
+// Default size, custom color by name (accepts any iText WebColors name or hex)
+byte[] out = pdfService.addWatermarkBytesBlocking(pdfBytes, "DRAFT", "red");
+
+// Custom size + color name
+byte[] out = pdfService.addWatermarkBytesBlocking(pdfBytes, "DRAFT", 72f, "#AA0000");
+
+// Custom size + java.awt.Color (bridges to iText internally)
+byte[] out = pdfService.addWatermarkBytesBlocking(pdfBytes, "DRAFT", 72f, java.awt.Color.RED);
+
+// Custom size + iText Color directly
+byte[] out = pdfService.addWatermarkBytesBlocking(pdfBytes, "DRAFT", 72f, new DeviceRgb(170, 0, 0));
+```
+
+Multi-line watermarks are supported (split on `\n`); lines stack perpendicular to the diagonal and stay centered as a block.
+
+### PDF Signing (`AbstractSignService`)
+
+`AbstractSignService` wraps iText's `PdfSigner` for PAdES-compliant digital signatures with an embedded signer-name block. Subclass it and implement `resolveSigningMaterial(alias, commonName)` to supply the certificate chain and private key (typically from your `CertificateService` or vault).
+
+The bundled THSarabun font is the default, so Thai signer names render correctly without any extra setup:
+
+```java
+@Service
+public class RamaSignService extends AbstractSignService {
+
+    // 3-arg constructor: uses the bundled THSarabun as signer-block font
+    public RamaSignService(ITSAClient tsa, HttpTsaConfiguration tsaConfig) {
+        super(tsa, tsaConfig, "/images/your-org-logo.png");
+    }
+
+    @Override
+    protected SigningMaterial resolveSigningMaterial(String alias, String commonName) throws Exception {
+        // build your Certificate[] and PrivateKey
+        return new SigningMaterial(chain, privateKey);
+    }
+}
+```
+
+Override the font with your own if needed:
+
+```java
+// 4-arg form: null or blank fontPath also falls back to the default
+super(tsa, tsaConfig, "/fonts/my-custom-font.ttf", "/images/your-org-logo.png");
+```
+
+The bundled font classpath path is exposed as `AbstractSignService.DEFAULT_FONT_RESOURCE = "/org/rama/fonts/THSarabunNew.ttf"` — use the same path from your own code if you want to reuse the font elsewhere (e.g., in a custom iText layout).
+
+> **Note on the font path:** the font ships under `/org/rama/fonts/` rather than `/fonts/` so it can't be accidentally shadowed by a consumer app's own `src/main/resources/fonts/THSarabunNew.ttf` when Spring Boot's fat-jar classloader searches `BOOT-INF/classes/` before `BOOT-INF/lib/*.jar`.
+
 ### Encryption
 
 `EncryptionUtil` provides AES/CBC encryption. Set the key:

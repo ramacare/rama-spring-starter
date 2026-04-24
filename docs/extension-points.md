@@ -100,6 +100,12 @@ public class MyMeilisearchMapper implements IMeilisearchMapper<MyEntity> {
 }
 ```
 
+## PDF Signing Service
+
+`AbstractSignService` is an abstract class rather than a starter-provided bean — consumers subclass it to inject their signing material source (certificate store, vault, etc.). See [Consumer Manual § PDF Signing](./consumer-manual.md#pdf-signing-abstractsignservice) for a worked example.
+
+The starter bundles `THSarabunNew.ttf` at `/org/rama/fonts/THSarabunNew.ttf` so Thai signer names render correctly. The 3-arg constructor uses this default; pass an explicit `fontPath` to the 4-arg form to override. Null or blank `fontPath` also falls back to the default.
+
 ## GraphQL Exception Resolver
 
 Extend `StarterGraphqlExceptionResolver` for app-specific exceptions:
