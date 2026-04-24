@@ -293,18 +293,34 @@ private Map<String, Object> encryptedJson;
 
 ## 7. Liquibase Migrations
 
-The starter manages its own tables via `rama-spring-starter-master.yaml`. Include it in your app's changelog:
+The starter ships its changelog files inside the JAR. **You must `<include>` them in your app's master changelog** — the standard Spring Boot way — and point `spring.liquibase.change-log` at that master.
+
+```properties
+spring.liquibase.change-log=classpath:/db/db.changelog-master.yaml
+```
 
 ```yaml
 # db.changelog-master.yaml
 databaseChangeLog:
   - include:
       file: db/changelog/rama-spring-starter-master.yaml
+  # Optional: include if you use Quartz-backed JDBC job store
+  - include:
+      file: db/changelog/rama-spring-quartz.changelog.xml
   - include:
       file: db/changelog/your-app-tables.yaml
 ```
 
-Starter-managed tables: `api`, `api_header_set`, `asset_file`, `master_group`, `master_id`, `master_item`, `revision`, `system_log`, `system_parameter`, `system_template`, `client_config`
+Starter-managed tables: `api`, `api_header_set`, `asset_file`, `master_group`, `master_id`, `master_item`, `revision`, `system_log`, `system_parameter`, `system_template`, `client_config`, `api_key`
+
+### How the starter coexists with Spring Boot's default Liquibase
+
+The starter registers a fallback `ramaStarterLiquibase` bean guarded with `@ConditionalOnMissingBean(SpringLiquibase.class)`. The auto-config is ordered AFTER `LiquibaseAutoConfiguration`, so:
+
+- **If you set `spring.liquibase.change-log`** (recommended): Spring Boot's default `liquibase` bean runs your master changelog. The starter's fallback bean backs off. Your master must `<include>` the starter changelog(s) as shown above.
+- **If you do NOT configure `spring.liquibase.change-log`**: Spring Boot's default backs off (no changelog), the starter's fallback takes over and runs `rama.liquibase.change-log` (default: `rama-spring-starter-master.yaml`). Starter tables exist; your app tables do not. Only suitable for apps that *only* use starter tables.
+
+To disable the starter's fallback entirely (e.g., if you want to fail fast when no Liquibase is configured), set `rama.liquibase.enabled=false`.
 
 ## 8. FTP Support (Optional)
 

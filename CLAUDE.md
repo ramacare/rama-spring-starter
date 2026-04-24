@@ -80,12 +80,13 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `rama.meilisearch.enabled` -- Meilisearch sync
 - `rama.meilisearch.initialize-indexes` -- Meilisearch index auto-initialization
 - `rama.graphql.enabled` -- GraphQL scalars and directives
-- `rama.liquibase.enabled` -- Starter Liquibase migrations
+- `rama.liquibase.enabled` -- Starter fallback Liquibase migrations. The starter's `ramaStarterLiquibase` bean is guarded with `@ConditionalOnMissingBean(SpringLiquibase.class)` and only runs when no Spring Boot `liquibase` bean exists. When `spring.liquibase.change-log` is set, Spring Boot's default runs the consumer's master changelog (which must `<include>` `rama-spring-starter-master.yaml` and optionally `rama-spring-quartz.changelog.xml`). Set to `false` to disable the fallback entirely
+- `rama.liquibase.change-log` -- Changelog path for the fallback bean (default: `classpath:/db/changelog/rama-spring-starter-master.yaml`). Only used when the fallback bean is active
 - `rama.ftp.enabled` -- FTP connection manager (default `false`)
 - `rama.security.api-key.enabled` -- API key authentication filter
 
 **Quartz properties** (Spring Boot, not `rama.` prefix):
-- `spring.quartz.enabled` -- Enable/disable Quartz entirely (default `true`). Set to `false` to skip Quartz auto-config, `SchedulerController`, `QuartzService`, and QRTZ_* Liquibase migration
+- `spring.quartz.enabled` -- Enable/disable Quartz entirely (default `true`). Set to `false` to skip Quartz auto-config, `SchedulerController`, and `QuartzService`. Quartz schema (QRTZ_*) is NOT auto-created by the starter — consumers using the JDBC job store should `<include>` `db/changelog/rama-spring-quartz.changelog.xml` in their master changelog
 - The starter provides sensible defaults via `rama-quartz-defaults.properties`: JDBC job-store, clustered mode, `QRTZ_` table prefix, 5 threads. Consumers can override any of these in their `application.properties`
 - `SchedulerController` is conditionally loaded only when `QuartzService` bean exists (which requires a `Scheduler` bean from Quartz auto-config)
 

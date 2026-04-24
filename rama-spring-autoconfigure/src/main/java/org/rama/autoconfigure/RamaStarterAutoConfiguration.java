@@ -114,7 +114,12 @@ import java.util.Map;
 @AutoConfiguration(afterName = {
         "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration",
         "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration",
-        "org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration"
+        "org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration",
+        // LiquibaseAutoConfiguration must be processed before us so its @ConditionalOnMissingBean
+        // sees an empty context, registers the default `liquibase` bean, and our
+        // ramaStarterLiquibase can then back off when the consumer has configured
+        // spring.liquibase.change-log. See starter#13.
+        "org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration"
 })
 @EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class})
 @PropertySource(value = "classpath:rama-quartz-defaults.properties", ignoreResourceNotFound = true)
@@ -624,26 +629,36 @@ public class RamaStarterAutoConfiguration {
         );
     }
 
+    /**
+     * Fallback SpringLiquibase bean for consumers who do NOT configure
+     * {@code spring.liquibase.change-log}. It runs the starter's own
+     * changelog ({@value RamaStarterLiquibaseProperties#DEFAULT_CHANGE_LOG}
+     * by default) so starter tables exist out of the box.
+     *
+     * <p>When a consumer configures Spring Boot's default Liquibase (by
+     * setting {@code spring.liquibase.change-log} or by defining their own
+     * {@link SpringLiquibase} bean), this bean backs off. The consumer is
+     * then responsible for including {@code rama-spring-starter-master.yaml}
+     * (and optionally {@code rama-spring-quartz.changelog.xml}) in their
+     * master changelog so the starter's tables still get created. See
+     * consumer-manual.md § Liquibase.
+     *
+     * <p>Why {@code @ConditionalOnMissingBean(SpringLiquibase.class)}: Spring
+     * Boot's own default is guarded by the same condition, so unconditionally
+     * registering a {@link SpringLiquibase} bean would silently displace it
+     * and cause the consumer's {@code spring.liquibase.change-log} to be
+     * ignored entirely — see starter#13 for the history.
+     */
     @Bean
     @ConditionalOnClass(SpringLiquibase.class)
     @ConditionalOnBean(DataSource.class)
+    @ConditionalOnMissingBean(SpringLiquibase.class)
     @ConditionalOnProperty(prefix = "rama.liquibase", name = "enabled", havingValue = "true", matchIfMissing = true)
     SpringLiquibase ramaStarterLiquibase(DataSource dataSource, RamaStarterLiquibaseProperties properties) {
         SpringLiquibase liquibase = new SpringLiquibase();
         liquibase.setDataSource(dataSource);
         liquibase.setChangeLog(properties.getChangeLog());
         liquibase.setShouldRun(properties.isEnabled());
-        return liquibase;
-    }
-
-    @Bean
-    @ConditionalOnClass(SpringLiquibase.class)
-    @ConditionalOnBean(DataSource.class)
-    @ConditionalOnProperty(prefix = "spring.quartz", name = "enabled", havingValue = "true", matchIfMissing = true)
-    SpringLiquibase ramaStarterQuartzLiquibase(DataSource dataSource) {
-        SpringLiquibase liquibase = new SpringLiquibase();
-        liquibase.setDataSource(dataSource);
-        liquibase.setChangeLog("classpath:db/changelog/rama-spring-quartz.changelog.xml");
         return liquibase;
     }
 
