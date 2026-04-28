@@ -29,7 +29,9 @@ import org.rama.graphql.directive.AuthDirectiveInstrumentation;
 import org.rama.graphql.directive.EmailConstraint;
 import org.rama.listener.global.GlobalAuditablePreInsertListener;
 import org.rama.listener.global.GlobalAuditablePreUpdateListener;
+import org.rama.listener.global.GlobalPostInsertEntityEventListener;
 import org.rama.listener.global.GlobalPostInsertRevisionListener;
+import org.rama.listener.global.GlobalPostUpdateEntityEventListener;
 import org.rama.listener.global.GlobalPostUpdateRevisionListener;
 import org.rama.meilisearch.MeilisearchIndexInitializer;
 import org.rama.meilisearch.listener.GlobalPostInsertMeilisearchListener;
@@ -444,6 +446,18 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    GlobalPostInsertEntityEventListener globalPostInsertEntityEventListener(ObjectProvider<EntityEventService> entityEventServiceProvider) {
+        return new GlobalPostInsertEntityEventListener(entityEventServiceProvider);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    GlobalPostUpdateEntityEventListener globalPostUpdateEntityEventListener(ObjectProvider<EntityEventService> entityEventServiceProvider) {
+        return new GlobalPostUpdateEntityEventListener(entityEventServiceProvider);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     GlobalAuditablePreInsertListener globalAuditablePreInsertListener(EnvironmentService environmentService) {
         return new GlobalAuditablePreInsertListener(environmentService);
     }
@@ -599,6 +613,8 @@ public class RamaStarterAutoConfiguration {
             ObjectProvider<GlobalAuditablePreUpdateListener> preUpdateProvider,
             ObjectProvider<GlobalPostInsertRevisionListener> revisionInsertProvider,
             ObjectProvider<GlobalPostUpdateRevisionListener> revisionUpdateProvider,
+            ObjectProvider<GlobalPostInsertEntityEventListener> entityEventInsertProvider,
+            ObjectProvider<GlobalPostUpdateEntityEventListener> entityEventUpdateProvider,
             ObjectProvider<GlobalPostInsertSyncToMongoListener> mongoInsertProvider,
             ObjectProvider<GlobalPostUpdateSyncToMongoListener> mongoUpdateProvider,
             ObjectProvider<GlobalPostInsertMeilisearchListener> meilisearchInsertProvider,
@@ -615,9 +631,11 @@ public class RamaStarterAutoConfiguration {
                         preInsertProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.PRE_INSERT).prependListener(listener));
                         preUpdateProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.PRE_UPDATE).prependListener(listener));
                         revisionInsertProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_INSERT).appendListener(listener));
+                        entityEventInsertProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_INSERT).appendListener(listener));
                         mongoInsertProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_INSERT).appendListener(listener));
                         meilisearchInsertProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_INSERT).appendListener(listener));
                         revisionUpdateProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_UPDATE).appendListener(listener));
+                        entityEventUpdateProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_UPDATE).appendListener(listener));
                         mongoUpdateProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_UPDATE).appendListener(listener));
                         meilisearchUpdateProvider.ifAvailable(listener -> registry.getEventListenerGroup(EventType.POST_UPDATE).appendListener(listener));
                     }
