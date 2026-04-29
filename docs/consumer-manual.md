@@ -201,6 +201,52 @@ rama.meilisearch.host-url=http://localhost:7700
 public class MyEntity implements Auditable { ... }
 ```
 
+### Entity Lifecycle Events
+
+`@EntityEvent` publishes a typed Spring `ApplicationEvent` after a JPA insert/update commits. Pair it with a custom event class implementing `IEntityEvent<T>` and a Spring `@EventListener` consumer to plug post-commit business logic into the entity lifecycle.
+
+```properties
+# No flag needed — listeners are wired by default whenever the starter is on the classpath.
+```
+
+Define an event class with a single-arg constructor:
+
+```java
+@Getter
+@AllArgsConstructor
+public class EncounterCreated implements IEntityEvent<Encounter> {
+    private Encounter entity;
+}
+```
+
+Annotate the entity:
+
+```java
+@Entity
+@EntityEvent(createdEvent = EncounterCreated.class, updatedEvent = EncounterUpdated.class)
+public class Encounter implements Auditable { ... }
+```
+
+Consume the event:
+
+```java
+@Service
+public class OdooEncounterService {
+    @EventListener
+    public void onEncounterCreated(EncounterCreated event) {
+        // Runs after the create transaction commits — safe to enqueue
+        // outbound messages, kick off async work, etc. The entity is already
+        // persisted and visible to other connections.
+    }
+}
+```
+
+**Semantics:**
+
+- Both `createdEvent` and `updatedEvent` are optional; default to the generic `EntityCreated` / `EntityUpdated`. Set either to `EntityEmptyEvent.class` to opt out of that lifecycle phase.
+- `afterCommit = true` (the default) registers a `TransactionSynchronization` that publishes after the entity-write transaction commits. With `afterCommit = false`, the event publishes inside the write transaction — useful when the listener needs to participate in the same tx, but listener failures will then roll back the entity write.
+- `EntityEventService.publishEntityEvent` is the bean that does the work; consumers normally don't call it directly, but it's available for manual triggers (e.g. a backfill mutation that re-emits an event for a row that bypassed the listener path).
+
 ### Document Template Processing
 
 The starter provides a full DOCX-to-PDF pipeline:

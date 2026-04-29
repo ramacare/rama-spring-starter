@@ -16,7 +16,7 @@ rama-spring-starter-parent (pom)
 ## Package Map (`org.rama.*`)
 
 ### Annotations
-- `annotation` -- `@TrackRevision`, `@SyncToMongo`, `@SyncToMeilisearch`, `@TransformableMap`, `@ApiReturnType`
+- `annotation` -- `@TrackRevision`, `@SyncToMongo`, `@SyncToMeilisearch`, `@EntityEvent`, `@TransformableMap`, `@ApiReturnType`
 
 ### Entities
 - `entity` -- Base types: `Auditable`, `StatusCode`, `Response`, `PageableDTO`, `TimestampField`, `UserstampField`, converters (`JsonConverter`, `Encrypt`)
