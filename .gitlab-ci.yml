@@ -1,6 +1,7 @@
 stages:
   - build
   - test
+  - integration-test
   - deploy
 
 variables:
@@ -42,6 +43,26 @@ maven_test:
     reports:
       junit:
         - "*/target/surefire-reports/TEST-*.xml"
+
+maven_integration_test:
+  stage: integration-test
+  script:
+    # `verify` runs the full lifecycle including Failsafe (which picks up
+    # **/*IT.java per each module's pom). Surefire is invoked too, but its
+    # tests are already reported by maven_test — Failsafe's reports go to
+    # failsafe-reports so there's no double-counting in JUnit aggregation.
+    - mvn $MAVEN_CLI_OPTS verify
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - when: on_success
+  tags:
+    - dkrunner-20-63-tag
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - "*/target/failsafe-reports/TEST-*.xml"
 
 publish:
   stage: deploy
