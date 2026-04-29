@@ -1,6 +1,6 @@
 package org.rama.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.rama.entity.api.Api;
@@ -30,9 +30,9 @@ public class GenericApiService {
     private final ApiRepository apiRepository;
     private final ApiHeaderSetRepository apiHeaderSetRepository;
     private final WebClient webClient;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    public GenericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
+    public GenericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, JsonMapper objectMapper) {
         this.apiRepository = apiRepository;
         this.apiHeaderSetRepository = apiHeaderSetRepository;
         this.webClient = webClientBuilder.build();

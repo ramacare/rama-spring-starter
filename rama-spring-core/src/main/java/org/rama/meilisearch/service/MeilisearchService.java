@@ -1,7 +1,7 @@
 package org.rama.meilisearch.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Index;
 import com.meilisearch.sdk.SearchRequest;
@@ -29,10 +29,10 @@ import java.util.Map;
 public class MeilisearchService {
     private final ApplicationContext context;
     private final Client meilisearchClient;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
     private final MeilisearchErrorHandler errorHandler;
 
-    public MeilisearchService(ApplicationContext context, Client meilisearchClient, ObjectMapper objectMapper, MeilisearchErrorHandler errorHandler) {
+    public MeilisearchService(ApplicationContext context, Client meilisearchClient, JsonMapper objectMapper, MeilisearchErrorHandler errorHandler) {
         this.context = context;
         this.meilisearchClient = meilisearchClient;
         this.objectMapper = objectMapper;

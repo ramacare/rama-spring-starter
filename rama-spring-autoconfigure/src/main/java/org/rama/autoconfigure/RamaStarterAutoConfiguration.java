@@ -203,7 +203,7 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean({ApiRepository.class, ApiHeaderSetRepository.class})
-    GenericApiService genericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
+    GenericApiService genericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, JsonMapper objectMapper) {
         return new GenericApiService(apiRepository, apiHeaderSetRepository, webClientBuilder, objectMapper);
     }
 
@@ -245,7 +245,7 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(SystemLogRepository.class)
-    SystemLogService systemLogService(SystemLogRepository systemLogRepository, ObjectMapper objectMapper) {
+    SystemLogService systemLogService(SystemLogRepository systemLogRepository, JsonMapper objectMapper) {
         return new SystemLogService(systemLogRepository, objectMapper);
     }
 
@@ -533,7 +533,7 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnBean(Client.class)
     @ConditionalOnMissingBean
-    DefaultMeilisearchMapper defaultMeilisearchMapper(ObjectMapper objectMapper) {
+    DefaultMeilisearchMapper defaultMeilisearchMapper(JsonMapper objectMapper) {
         return new DefaultMeilisearchMapper(objectMapper);
     }
 
@@ -541,7 +541,7 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(Client.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.meilisearch", name = "enabled", havingValue = "true", matchIfMissing = true)
-    MeilisearchService meilisearchService(ApplicationContext applicationContext, Client client, ObjectMapper objectMapper, MeilisearchErrorHandler errorHandler) {
+    MeilisearchService meilisearchService(ApplicationContext applicationContext, Client client, JsonMapper objectMapper, MeilisearchErrorHandler errorHandler) {
         return new MeilisearchService(applicationContext, client, objectMapper, errorHandler);
     }
 

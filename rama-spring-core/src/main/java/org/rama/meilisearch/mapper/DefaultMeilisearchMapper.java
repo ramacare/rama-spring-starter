@@ -1,14 +1,14 @@
 package org.rama.meilisearch.mapper;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
 
 public class DefaultMeilisearchMapper implements IMeilisearchMapper {
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    public DefaultMeilisearchMapper(ObjectMapper objectMapper) {
+    public DefaultMeilisearchMapper(JsonMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 

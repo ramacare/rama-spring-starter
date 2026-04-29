@@ -1,7 +1,7 @@
 package org.rama.service.system;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 import lombok.RequiredArgsConstructor;
 import org.rama.entity.system.SystemLog;
 import org.rama.repository.system.SystemLogRepository;
@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SystemLogService {
     private final SystemLogRepository systemLogRepository;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     @Transactional
     public void log(SystemLog.LogLevel level, String key, String message, Object detail) {
