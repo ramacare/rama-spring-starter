@@ -1,18 +1,23 @@
 package org.rama.entity;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import org.rama.util.EncryptionUtil;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.cfg.CoercionAction;
+import tools.jackson.databind.cfg.CoercionInputShape;
+import tools.jackson.databind.json.JsonMapper;
 
 @Converter
 public class JsonEncryptConverter implements AttributeConverter<Object, String> {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+    private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
             .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .withCoercionConfigDefaults(cfg ->
+                    cfg.setCoercion(CoercionInputShape.String, CoercionAction.TryConvert))
+            .build();
 
     @Override
     public String convertToDatabaseColumn(Object attribute) {
@@ -22,7 +27,7 @@ public class JsonEncryptConverter implements AttributeConverter<Object, String> 
             }
             String json = OBJECT_MAPPER.writeValueAsString(attribute);
             return json.isEmpty() ? json : EncryptionUtil.encrypt(json);
-        } catch (JsonProcessingException ex) {
+        } catch (RuntimeException ex) {
             return null;
         }
     }
