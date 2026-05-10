@@ -14,11 +14,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.rama.entity.Revision;
 import org.rama.repository.revision.RevisionRepository;
 
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @Tag("unit")
@@ -97,6 +100,39 @@ class RevisionServiceTest {
         // Assert
         verify(revisionRepository).save(revisionCaptor.capture());
         assertThat(revisionCaptor.getValue().getMrn()).isNull();
+    }
+
+    @Test
+    void getStateAt_shouldReturnLatestRevisionAtOrBeforeTimestamp() {
+        String revisionKey = "org.rama.entity.Patient^id^12345";
+        OffsetDateTime at = OffsetDateTime.parse("2026-05-01T12:00:00Z");
+        Revision expected = new Revision();
+        expected.setRevisionKey(revisionKey);
+        expected.setRevisionDatetime(OffsetDateTime.parse("2026-04-30T08:00:00Z"));
+
+        when(revisionRepository
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc(revisionKey, at))
+                .thenReturn(Optional.of(expected));
+
+        Optional<Revision> result = revisionService.getStateAt(revisionKey, at);
+
+        assertThat(result).containsSame(expected);
+        verify(revisionRepository)
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc(eq(revisionKey), eq(at));
+    }
+
+    @Test
+    void getStateAt_shouldReturnEmpty_whenNoRevisionExistsBeforeTimestamp() {
+        String revisionKey = "org.rama.entity.Patient^id^99999";
+        OffsetDateTime at = OffsetDateTime.parse("2020-01-01T00:00:00Z");
+
+        when(revisionRepository
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc(revisionKey, at))
+                .thenReturn(Optional.empty());
+
+        Optional<Revision> result = revisionService.getStateAt(revisionKey, at);
+
+        assertThat(result).isEmpty();
     }
 
     @Test

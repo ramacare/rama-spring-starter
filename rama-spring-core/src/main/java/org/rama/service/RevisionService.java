@@ -37,6 +37,11 @@ public class RevisionService {
         revisionRepository.save(revision);
     }
 
+    public Optional<Revision> getStateAt(String revisionKey, OffsetDateTime at) {
+        return revisionRepository
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc(revisionKey, at);
+    }
+
     public String buildRevisionKey(EntityPersister persister, Object id) {
         return persister.getEntityName() + "^" + persister.getIdentifierPropertyName() + "^" + id;
     }
