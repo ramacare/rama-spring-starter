@@ -1,6 +1,5 @@
 package org.rama.autoconfigure;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Config;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -101,11 +100,15 @@ import org.springframework.core.convert.ConversionService;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.boot.graphql.autoconfigure.GraphQlSourceBuilderCustomizer;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.CoercionAction;
+import tools.jackson.databind.cfg.CoercionInputShape;
 import tools.jackson.databind.json.JsonMapper;
 
 import javax.sql.DataSource;
@@ -137,6 +140,21 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnMissingBean
     ObjectMapper ramaStarterObjectMapper() {
         return org.rama.entity.JsonConverter.createObjectMapper();
+    }
+
+    /**
+     * Apply the same lenient string-to-scalar coercion to Spring Boot's
+     * managed {@link JsonMapper} bean as we apply inside
+     * {@link org.rama.entity.JsonConverter}. Jackson 3 defaults to
+     * {@code CoercionAction.Fail} for {@code "1" -> int}; consumer code
+     * (e.g. JSON columns deserialized into POJOs) relies on Jackson 2's
+     * {@code TryConvert} behaviour.
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "ramaStarterCoercionCustomizer")
+    JsonMapperBuilderCustomizer ramaStarterCoercionCustomizer() {
+        return builder -> builder.withCoercionConfigDefaults(cfg ->
+                cfg.setCoercion(CoercionInputShape.String, CoercionAction.TryConvert));
     }
 
     @Bean
