@@ -1,0 +1,29 @@
+# ============================================================================
+# PostgreSQL -- STUB. Tracked by follow-up to issue #20.
+#
+# Design (two-tier like MSSQL, but with native declarative partitioning):
+#
+#   * revision_active: PARTITION BY RANGE (revision_datetime), monthly.
+#     PK on (id, revision_datetime) -- Postgres requires partition key in
+#     every unique constraint, same constraint as MySQL.
+#   * revision_archive: also PARTITION BY RANGE (revision_datetime),
+#     monthly. Same column shape.
+#   * Compression: TOAST handles JSON columns by default. For dramatic
+#     wins, consumer can install Hydra Columnar / Citus Columnar
+#     extensions and rebuild archive partitions as columnar.
+#   * BRIN index on revision_datetime in both tables -- tiny, ideal for
+#     time-ordered append-only data.
+#   * Maintenance job's Postgres variant: ALTER TABLE revision_active
+#     DETACH PARTITION pXXX, then ALTER TABLE revision_archive ATTACH
+#     PARTITION pXXX FOR VALUES FROM ... TO ... . Both metadata-only.
+#   * Sequence revision_id_seq seeded at cutover the same way as MSSQL
+#     (ALTER SEQUENCE ... RESTART WITH MAX(legacy.id)+1).
+#   * Backfill job is unchanged -- atomic per-month INSERT+DELETE works
+#     verbatim because revision_legacy is just a regular non-partitioned
+#     table after the rename.
+#
+# Why no implementation yet: declarative partitioning + extension choices
+# (hydra_columnar vs citus_columnar vs nothing) need design review with
+# consumers actually running on Postgres.
+# ============================================================================
+databaseChangeLog: []

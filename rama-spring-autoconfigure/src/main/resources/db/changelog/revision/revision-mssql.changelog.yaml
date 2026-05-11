@@ -1,0 +1,315 @@
+# ============================================================================
+# SQL Server -- bounded-active + columnstore-archive tier for the revision
+# audit log. Tracked by issue #20.
+#
+# Always-applied changesets (run on every consumer's next deploy):
+#   001 -- revision_id_seq (START WITH 1; seeded for real during cutover).
+#   002 -- pf_revision_monthly partition function + ps_revision_monthly
+#          partition scheme spanning months [now-12, now+24].
+#   003 -- revision_active: rowstore, partitioned, clustered on
+#          (revision_key, revision_datetime, id). Target of all new writes.
+#   004 -- revision_archive: clustered columnstore, partitioned. Target of
+#          backfill and ongoing sliding-window SWITCH.
+#
+# Opt-in cutover (set spring.liquibase.parameters.revisionCutoverEnabled=true
+# then re-deploy):
+#   005 -- ALTER SEQUENCE revision_id_seq RESTART WITH MAX(revision.id)+1.
+#   006 -- sp_rename revision -> revision_legacy.
+#   007 -- CREATE VIEW dbo.revision AS SELECT * FROM revision_active. SQL
+#          Server permits INSERT through this single-table view.
+#   008 -- CREATE VIEW dbo.revision_history UNIONs active + archive +
+#          legacy (when legacy exists).
+#
+# Opt-in cleanup (after backfill drains legacy; set
+# spring.liquibase.parameters.revisionCleanupEnabled=true):
+#   009 -- DROP VIEW revision_history (it depends on revision_legacy).
+#   010 -- DROP TABLE revision_legacy (only if empty).
+#   011 -- Recreate revision_history without the legacy union.
+#
+# Gating uses `changeLogPropertyDefined` with `onFail: CONTINUE` so the
+# changeset stays evaluable on every Liquibase run -- a consumer can flip
+# the parameter to "true" at any later point and the changeset will run.
+# ============================================================================
+databaseChangeLog:
+- changeSet:
+    id: revision-mssql-001-id-sequence
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM sys.sequences WHERE name = 'revision_id_seq'
+    changes:
+    - sql:
+        sql: CREATE SEQUENCE dbo.revision_id_seq AS BIGINT START WITH 1 INCREMENT BY 1 CACHE 100;
+- changeSet:
+    id: revision-mssql-002-partition-scheme
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM sys.partition_functions WHERE name = 'pf_revision_monthly'
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          DECLARE @i INT = -12;
+          DECLARE @max INT = 24;
+          DECLARE @anchor DATE = DATEFROMPARTS(YEAR(SYSUTCDATETIME()), MONTH(SYSUTCDATETIME()), 1);
+          DECLARE @values NVARCHAR(MAX) = N'';
+          WHILE @i <= @max
+          BEGIN
+              DECLARE @d DATE = DATEADD(MONTH, @i, @anchor);
+              IF LEN(@values) > 0 SET @values = @values + N', ';
+              SET @values = @values + N'''' + CONVERT(VARCHAR(10), @d, 23) + N' 00:00:00''';
+              SET @i = @i + 1;
+          END
+          DECLARE @sql NVARCHAR(MAX) =
+              N'CREATE PARTITION FUNCTION pf_revision_monthly (DATETIME2) '
+              + N'AS RANGE RIGHT FOR VALUES (' + @values + N')';
+          EXEC sp_executesql @sql;
+          EXEC('CREATE PARTITION SCHEME ps_revision_monthly AS PARTITION pf_revision_monthly ALL TO ([PRIMARY])');
+- changeSet:
+    id: revision-mssql-003-active-table
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: revision_active
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          CREATE TABLE dbo.revision_active (
+              id BIGINT NOT NULL
+                  CONSTRAINT df_revision_active_id DEFAULT (NEXT VALUE FOR dbo.revision_id_seq),
+              revision_key VARCHAR(255) NOT NULL,
+              mrn VARCHAR(100) NULL,
+              revision_entity VARCHAR(255) NULL,
+              revision_datetime DATETIME2 NOT NULL,
+              revision_data NVARCHAR(MAX) NOT NULL,
+              revision_change NVARCHAR(MAX) NULL,
+              created_by VARCHAR(200) NULL,
+              updated_by VARCHAR(200) NULL,
+              created_at DATETIME2 NULL,
+              updated_at DATETIME2 NULL,
+              CONSTRAINT pk_revision_active PRIMARY KEY NONCLUSTERED (id) ON [PRIMARY],
+              INDEX cx_revision_active
+                  CLUSTERED (revision_key, revision_datetime, id)
+                  ON ps_revision_monthly(revision_datetime),
+              INDEX ix_revision_active__entity_mrn_datetime
+                  NONCLUSTERED (revision_entity, mrn, revision_datetime DESC)
+                  ON ps_revision_monthly(revision_datetime)
+          );
+- changeSet:
+    id: revision-mssql-004-archive-table
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: revision_archive
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          CREATE TABLE dbo.revision_archive (
+              id BIGINT NOT NULL,
+              revision_key VARCHAR(255) NOT NULL,
+              mrn VARCHAR(100) NULL,
+              revision_entity VARCHAR(255) NULL,
+              revision_datetime DATETIME2 NOT NULL,
+              revision_data NVARCHAR(MAX) NOT NULL,
+              revision_change NVARCHAR(MAX) NULL,
+              created_by VARCHAR(200) NULL,
+              updated_by VARCHAR(200) NULL,
+              created_at DATETIME2 NULL,
+              updated_at DATETIME2 NULL,
+              INDEX cci_revision_archive CLUSTERED COLUMNSTORE
+                  ON ps_revision_monthly(revision_datetime)
+          );
+          CREATE UNIQUE NONCLUSTERED INDEX uix_revision_archive_id
+              ON dbo.revision_archive (id, revision_datetime)
+              ON ps_revision_monthly(revision_datetime);
+- changeSet:
+    id: revision-mssql-005-seed-sequence-from-legacy
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          -- Seed sequence to MAX(revision.id) + 1 BEFORE the rename, while
+          -- revision is still the original table (so MAX(id) is final).
+          DECLARE @restart BIGINT;
+          SELECT @restart = ISNULL(MAX(id), 0) + 1 FROM dbo.revision;
+          DECLARE @stmt NVARCHAR(MAX) =
+              N'ALTER SEQUENCE dbo.revision_id_seq RESTART WITH ' + CAST(@restart AS NVARCHAR(20));
+          EXEC sp_executesql @stmt;
+- changeSet:
+    id: revision-mssql-006-rename-legacy
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    - not:
+        tableExists:
+          tableName: revision_legacy
+    changes:
+    - sql:
+        sql: EXEC sp_rename 'dbo.revision', 'revision_legacy';
+- changeSet:
+    id: revision-mssql-007-write-view
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision
+    - not:
+        tableExists:
+          tableName: revision
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          EXEC('CREATE VIEW dbo.revision AS
+                SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                       revision_data, revision_change,
+                       created_by, updated_by, created_at, updated_at
+                FROM dbo.revision_active');
+- changeSet:
+    id: revision-mssql-008-history-view
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision_history
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          DECLARE @stmt NVARCHAR(MAX) = N'CREATE VIEW dbo.revision_history AS
+              SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                     revision_data, revision_change,
+                     created_by, updated_by, created_at, updated_at
+              FROM dbo.revision_active
+              UNION ALL
+              SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                     revision_data, revision_change,
+                     created_by, updated_by, created_at, updated_at
+              FROM dbo.revision_archive';
+          IF OBJECT_ID('dbo.revision_legacy', 'U') IS NOT NULL
+              SET @stmt = @stmt + N'
+              UNION ALL
+              SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                     revision_data, revision_change,
+                     created_by, updated_by, created_at, updated_at
+              FROM dbo.revision_legacy';
+          EXEC sp_executesql @stmt;
+- changeSet:
+    id: revision-mssql-009-drop-history-view-pre-cleanup
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - viewExists:
+        viewName: revision_history
+    - tableExists:
+        tableName: revision_legacy
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM dbo.revision_legacy
+    changes:
+    - sql:
+        sql: EXEC('DROP VIEW dbo.revision_history');
+- changeSet:
+    id: revision-mssql-010-drop-legacy-table
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision_legacy
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM dbo.revision_legacy
+    - not:
+        viewExists:
+          viewName: revision_history
+    changes:
+    - sql:
+        sql: DROP TABLE dbo.revision_legacy;
+- changeSet:
+    id: revision-mssql-011-history-view-post-cleanup
+    author: claude
+    dbms: mssql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision_history
+    - not:
+        tableExists:
+          tableName: revision_legacy
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          EXEC('CREATE VIEW dbo.revision_history AS
+                SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                       revision_data, revision_change,
+                       created_by, updated_by, created_at, updated_at
+                FROM dbo.revision_active
+                UNION ALL
+                SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                       revision_data, revision_change,
+                       created_by, updated_by, created_at, updated_at
+                FROM dbo.revision_archive');

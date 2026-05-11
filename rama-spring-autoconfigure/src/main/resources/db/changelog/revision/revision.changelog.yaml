@@ -1,0 +1,12 @@
+# Aggregator for the revision tiered-storage migration. Each per-DBMS file
+# is gated by its own `dbms` attribute on every changeset, so Liquibase
+# applies only the right one for the consumer's database.
+databaseChangeLog:
+- include:
+    file: db/changelog/revision/revision-mssql.changelog.yaml
+- include:
+    file: db/changelog/revision/revision-mysql.changelog.yaml
+- include:
+    file: db/changelog/revision/revision-postgres.changelog.yaml
+- include:
+    file: db/changelog/revision/revision-default.changelog.yaml

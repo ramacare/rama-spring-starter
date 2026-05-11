@@ -1,0 +1,26 @@
+# ============================================================================
+# MySQL / MariaDB -- STUB. Tracked by follow-up to issue #20.
+#
+# Design (different from MSSQL -- single partitioned table, not two-tier):
+#
+#   * revision: InnoDB, PARTITION BY RANGE COLUMNS(revision_datetime),
+#     monthly partitions. PK is (id, revision_datetime) because MySQL
+#     requires every unique key to include the partition expression.
+#   * Compression is per-partition via ROW_FORMAT=COMPRESSED on older
+#     partitions; ALTER TABLE ... REBUILD PARTITION rewrites in place.
+#   * Backfill is unnecessary -- old data stays in the same logical table,
+#     just inside its date partition.
+#   * Maintenance job's MySQL variant: ALTER TABLE revision REBUILD
+#     PARTITION pXXX with ROW_FORMAT=COMPRESSED for partitions older than
+#     the active window. DROP PARTITION available if retention ever
+#     loosens (out of scope today -- "keep forever" policy).
+#   * One-time migration of an existing non-partitioned revision table to
+#     a partitioned schema requires either an offline rebuild
+#     (ALTER TABLE ... PARTITION BY RANGE ...) or a swap-via-RENAME with
+#     INSERT INTO copy. Documented in the migration runbook.
+#
+# Why no implementation yet: MySQL partitioning's unique-key constraint
+# changes the PK shape; the right call needs design review with consumers
+# actually running on MySQL. File is here so a follow-up MR has a target.
+# ============================================================================
+databaseChangeLog: []

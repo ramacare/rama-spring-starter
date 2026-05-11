@@ -9,3 +9,5 @@ databaseChangeLog:
     file: db/changelog/rama-spring-system.changelog.yaml
 - include:
     file: db/changelog/rama-spring-security.changelog.yaml
+- include:
+    file: db/changelog/revision/revision.changelog.yaml

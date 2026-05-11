@@ -1,0 +1,306 @@
+# ============================================================================
+# Default / fallback -- H2 and any DBMS without a dedicated revision file.
+# Plain unpartitioned tables. The Quartz jobs degrade gracefully:
+#   * RevisionLegacyBackfillJob still works (pure INSERT+DELETE per month).
+#   * RevisionPartitionMaintenanceJob is a no-op (no partitions to manage).
+#
+# Cutover and cleanup stages are gated on Liquibase parameters
+# (revisionCutoverEnabled / revisionCleanupEnabled). By default these are
+# unset -- consumers stay on the original revision table and CI/H2 tests
+# stay on the new revision_active/revision_archive tables alongside it.
+#
+# Currently only H2 is in the fallback. To add another DBMS (e.g. Oracle),
+# extend the `dbms` attribute on each changeset.
+# ============================================================================
+databaseChangeLog:
+- changeSet:
+    id: revision-default-001-active-table
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: revision_active
+    changes:
+    - createTable:
+        tableName: revision_active
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: revision_key
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: mrn
+            type: VARCHAR(100)
+        - column:
+            name: revision_entity
+            type: VARCHAR(255)
+        - column:
+            name: revision_datetime
+            type: ${timestampType}
+            constraints:
+              nullable: false
+        - column:
+            name: revision_data
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: revision_change
+            type: ${clobType}
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: revision_active
+        indexName: ix_revision_active__revision_key_datetime
+        columns:
+        - column:
+            name: revision_key
+        - column:
+            name: revision_datetime
+            descending: true
+    - createIndex:
+        tableName: revision_active
+        indexName: ix_revision_active__revision_entity_mrn_datetime
+        columns:
+        - column:
+            name: revision_entity
+        - column:
+            name: mrn
+        - column:
+            name: revision_datetime
+            descending: true
+- changeSet:
+    id: revision-default-002-archive-table
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: revision_archive
+    changes:
+    - createTable:
+        tableName: revision_archive
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: revision_key
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: mrn
+            type: VARCHAR(100)
+        - column:
+            name: revision_entity
+            type: VARCHAR(255)
+        - column:
+            name: revision_datetime
+            type: ${timestampType}
+            constraints:
+              nullable: false
+        - column:
+            name: revision_data
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: revision_change
+            type: ${clobType}
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: revision_archive
+        indexName: ix_revision_archive__revision_key_datetime
+        columns:
+        - column:
+            name: revision_key
+        - column:
+            name: revision_datetime
+            descending: true
+- changeSet:
+    id: revision-default-003-rename-legacy
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    - not:
+        tableExists:
+          tableName: revision_legacy
+    changes:
+    - renameTable:
+        oldTableName: revision
+        newTableName: revision_legacy
+- changeSet:
+    id: revision-default-004-write-view
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision
+    - not:
+        tableExists:
+          tableName: revision
+    changes:
+    - createView:
+        viewName: revision
+        replaceIfExists: false
+        selectQuery: |
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_active
+- changeSet:
+    id: revision-default-005-history-view
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision_history
+    - tableExists:
+        tableName: revision_legacy
+    changes:
+    - createView:
+        viewName: revision_history
+        replaceIfExists: false
+        selectQuery: |
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_active
+          UNION ALL
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_archive
+          UNION ALL
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_legacy
+- changeSet:
+    id: revision-default-006-drop-history-view-pre-cleanup
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - viewExists:
+        viewName: revision_history
+    - tableExists:
+        tableName: revision_legacy
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM revision_legacy
+    changes:
+    - dropView:
+        viewName: revision_history
+- changeSet:
+    id: revision-default-007-drop-legacy-table
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision_legacy
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM revision_legacy
+    - not:
+        viewExists:
+          viewName: revision_history
+    changes:
+    - dropTable:
+        tableName: revision_legacy
+- changeSet:
+    id: revision-default-008-history-view-post-cleanup
+    author: claude
+    dbms: h2
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision_history
+    - not:
+        tableExists:
+          tableName: revision_legacy
+    changes:
+    - createView:
+        viewName: revision_history
+        replaceIfExists: false
+        selectQuery: |
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_active
+          UNION ALL
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_archive
