@@ -1,26 +1,145 @@
 # ============================================================================
-# MySQL / MariaDB -- STUB. Tracked by follow-up to issue #20.
+# MySQL / MariaDB -- single partitioned `revision` table.
 #
-# Design (different from MSSQL -- single partitioned table, not two-tier):
+# Design rationale (see issue #20 design comment for full discussion):
+#   * MySQL has no clustered columnstore. The two-tier model used on MSSQL
+#     buys little here -- InnoDB ROW_FORMAT=COMPRESSED gives ~2-3x at most.
+#   * Cleaner shape: ONE partitioned `revision` table, monthly RANGE
+#     partitions. Recent partitions stay default row format; older
+#     partitions get rebuilt as COMPRESSED via the maintenance job.
+#   * PK is (id, revision_datetime) -- MySQL requires every unique key
+#     to include the partition expression.
+#   * AUTO_INCREMENT for id; reseed at cutover via ALTER TABLE ... AUTO_INCREMENT.
+#   * No backfill job needed -- legacy data is copied inline during the
+#     cutover changeset.
+#   * Partition list is bootstrapped with a single MAXVALUE partition; the
+#     maintenance job uses REORGANIZE PARTITION to split off monthly
+#     partitions as the calendar advances. Standard MySQL sliding-window
+#     pattern, and lets the WHILE-loop-bootstrap problem be avoided here
+#     (WHILE is only valid inside stored procedures in MySQL).
 #
-#   * revision: InnoDB, PARTITION BY RANGE COLUMNS(revision_datetime),
-#     monthly partitions. PK is (id, revision_datetime) because MySQL
-#     requires every unique key to include the partition expression.
-#   * Compression is per-partition via ROW_FORMAT=COMPRESSED on older
-#     partitions; ALTER TABLE ... REBUILD PARTITION rewrites in place.
-#   * Backfill is unnecessary -- old data stays in the same logical table,
-#     just inside its date partition.
-#   * Maintenance job's MySQL variant: ALTER TABLE revision REBUILD
-#     PARTITION pXXX with ROW_FORMAT=COMPRESSED for partitions older than
-#     the active window. DROP PARTITION available if retention ever
-#     loosens (out of scope today -- "keep forever" policy).
-#   * One-time migration of an existing non-partitioned revision table to
-#     a partitioned schema requires either an offline rebuild
-#     (ALTER TABLE ... PARTITION BY RANGE ...) or a swap-via-RENAME with
-#     INSERT INTO copy. Documented in the migration runbook.
+# Always-applied: nothing. The existing rama-spring-system-006-revision
+# changeset creates the original (unpartitioned) revision table. MySQL
+# cannot convert it in-place to partitioned -- the conversion is the
+# cutover.
 #
-# Why no implementation yet: MySQL partitioning's unique-key constraint
-# changes the PK shape; the right call needs design review with consumers
-# actually running on MySQL. File is here so a follow-up MR has a target.
+# Cutover (opt-in via spring.liquibase.parameters.revisionCutoverEnabled=true):
+#   001 -- CREATE revision_new partitioned, single p_future MAXVALUE partition,
+#          AUTO_INCREMENT seeded to MAX(revision.id)+1.
+#   002 -- INSERT INTO revision_new SELECT * FROM revision.
+#   003 -- RENAME TABLE revision TO revision_legacy, revision_new TO revision.
+#
+# Cleanup (opt-in via revisionCleanupEnabled=true):
+#   004 -- DROP TABLE revision_legacy.
 # ============================================================================
-databaseChangeLog: []
+databaseChangeLog:
+- changeSet:
+    id: revision-mysql-001-active-table
+    author: claude
+    dbms: mysql,mariadb
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    - not:
+        tableExists:
+          tableName: revision_new
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          SET @start := (SELECT IFNULL(MAX(id), 0) + 1 FROM revision);
+          SET @stmt := CONCAT(
+              'CREATE TABLE revision_new (',
+              '  id BIGINT NOT NULL AUTO_INCREMENT,',
+              '  revision_key VARCHAR(255) NOT NULL,',
+              '  mrn VARCHAR(100) NULL,',
+              '  revision_entity VARCHAR(255) NULL,',
+              '  revision_datetime DATETIME(6) NOT NULL,',
+              '  revision_data JSON NOT NULL,',
+              '  revision_change JSON NULL,',
+              '  created_by VARCHAR(200) NULL,',
+              '  updated_by VARCHAR(200) NULL,',
+              '  created_at DATETIME(6) NULL,',
+              '  updated_at DATETIME(6) NULL,',
+              '  PRIMARY KEY (id, revision_datetime),',
+              '  KEY ix_revision_new__revision_key_datetime (revision_key, revision_datetime DESC),',
+              '  KEY ix_revision_new__revision_entity_mrn_datetime (revision_entity, mrn, revision_datetime DESC)',
+              ') ENGINE=InnoDB AUTO_INCREMENT=', @start, ' ROW_FORMAT=DYNAMIC',
+              ' PARTITION BY RANGE COLUMNS(revision_datetime) (',
+              '   PARTITION p_future VALUES LESS THAN (MAXVALUE)',
+              ' )');
+          PREPARE s FROM @stmt;
+          EXECUTE s;
+          DEALLOCATE PREPARE s;
+- changeSet:
+    id: revision-mysql-002-copy-legacy
+    author: claude
+    dbms: mysql,mariadb
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    - tableExists:
+        tableName: revision_new
+    changes:
+    - sql:
+        sql: |
+          INSERT INTO revision_new
+              (id, revision_key, mrn, revision_entity, revision_datetime,
+               revision_data, revision_change,
+               created_by, updated_by, created_at, updated_at)
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision;
+- changeSet:
+    id: revision-mysql-003-swap-tables
+    author: claude
+    dbms: mysql,mariadb
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    - tableExists:
+        tableName: revision_new
+    - not:
+        tableExists:
+          tableName: revision_legacy
+    changes:
+    - sql:
+        sql: RENAME TABLE revision TO revision_legacy, revision_new TO revision;
+- changeSet:
+    id: revision-mysql-004-drop-legacy
+    author: claude
+    dbms: mysql,mariadb
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision_legacy
+    - tableExists:
+        tableName: revision
+    - sqlCheck:
+        expectedResult: 0
+        sql: |
+          SELECT (SELECT COUNT(*) FROM revision_legacy)
+               - (SELECT COUNT(*) FROM revision WHERE id <= (SELECT IFNULL(MAX(id), 0) FROM revision_legacy))
+    changes:
+    - dropTable:
+        tableName: revision_legacy
