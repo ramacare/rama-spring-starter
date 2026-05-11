@@ -1,29 +1,313 @@
 # ============================================================================
-# PostgreSQL -- STUB. Tracked by follow-up to issue #20.
+# PostgreSQL -- bounded-active + archive tier using declarative partitioning.
 #
-# Design (two-tier like MSSQL, but with native declarative partitioning):
+# Design rationale (see issue #20 design comment for full discussion):
+#   * Postgres declarative partitioning (>= v10) gives us monthly partition
+#     tables that LOOK like a single logical table to writers/readers,
+#     plus metadata-only DETACH/ATTACH for moving partitions between
+#     parent tables -- conceptually the same as MSSQL's SWITCH.
+#   * Two-tier shape (active + archive) maps cleanly: detach an old
+#     partition from revision_active, attach it under revision_archive,
+#     same bounds. Both operations are O(1) metadata.
+#   * PK is (id, revision_datetime) -- Postgres requires every unique
+#     constraint to include the partition key.
+#   * BRIN index on revision_datetime (tiny, ideal for time-ordered
+#     append-only data) + B-tree on revision_key for point-in-time reads.
+#   * Sequence revision_id_seq, seeded at cutover from MAX(legacy.id)+1.
 #
-#   * revision_active: PARTITION BY RANGE (revision_datetime), monthly.
-#     PK on (id, revision_datetime) -- Postgres requires partition key in
-#     every unique constraint, same constraint as MySQL.
-#   * revision_archive: also PARTITION BY RANGE (revision_datetime),
-#     monthly. Same column shape.
-#   * Compression: TOAST handles JSON columns by default. For dramatic
-#     wins, consumer can install Hydra Columnar / Citus Columnar
-#     extensions and rebuild archive partitions as columnar.
-#   * BRIN index on revision_datetime in both tables -- tiny, ideal for
-#     time-ordered append-only data.
-#   * Maintenance job's Postgres variant: ALTER TABLE revision_active
-#     DETACH PARTITION pXXX, then ALTER TABLE revision_archive ATTACH
-#     PARTITION pXXX FOR VALUES FROM ... TO ... . Both metadata-only.
-#   * Sequence revision_id_seq seeded at cutover the same way as MSSQL
-#     (ALTER SEQUENCE ... RESTART WITH MAX(legacy.id)+1).
-#   * Backfill job is unchanged -- atomic per-month INSERT+DELETE works
-#     verbatim because revision_legacy is just a regular non-partitioned
-#     table after the rename.
+# Always-applied (auto-runs on every consumer's next deploy):
+#   001 -- CREATE SEQUENCE revision_id_seq (start 1; reseeded at cutover).
+#   002 -- CREATE TABLE revision_active partitioned by RANGE.
+#   003 -- CREATE TABLE revision_archive partitioned by RANGE.
+#   004 -- Bootstrap month partitions for active [-12, +24] months under
+#          revision_active.
 #
-# Why no implementation yet: declarative partitioning + extension choices
-# (hydra_columnar vs citus_columnar vs nothing) need design review with
-# consumers actually running on Postgres.
+# Cutover (opt-in via spring.liquibase.parameters.revisionCutoverEnabled=true):
+#   005 -- ALTER SEQUENCE revision_id_seq RESTART WITH MAX(legacy.id)+1.
+#   006 -- ALTER TABLE revision RENAME TO revision_legacy.
+#   007 -- CREATE VIEW revision (single-table view of revision_active --
+#          Postgres permits INSERT/UPDATE through it).
+#   008 -- CREATE VIEW revision_history UNIONing all tiers.
+#
+# Cleanup (opt-in via revisionCleanupEnabled=true):
+#   009 -- DROP VIEW revision_history (depends on revision_legacy).
+#   010 -- DROP TABLE revision_legacy.
+#   011 -- Recreate revision_history without the legacy union.
 # ============================================================================
-databaseChangeLog: []
+databaseChangeLog:
+- changeSet:
+    id: revision-postgres-001-id-sequence
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM pg_class WHERE relkind = 'S' AND relname = 'revision_id_seq'
+    changes:
+    - sql:
+        sql: CREATE SEQUENCE revision_id_seq AS BIGINT START WITH 1 INCREMENT BY 1 CACHE 100;
+- changeSet:
+    id: revision-postgres-002-active-table
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: revision_active
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          CREATE TABLE revision_active (
+              id BIGINT NOT NULL DEFAULT nextval('revision_id_seq'),
+              revision_key VARCHAR(255) NOT NULL,
+              mrn VARCHAR(100) NULL,
+              revision_entity VARCHAR(255) NULL,
+              revision_datetime TIMESTAMPTZ NOT NULL,
+              revision_data JSONB NOT NULL,
+              revision_change JSONB NULL,
+              created_by VARCHAR(200) NULL,
+              updated_by VARCHAR(200) NULL,
+              created_at TIMESTAMPTZ NULL,
+              updated_at TIMESTAMPTZ NULL,
+              PRIMARY KEY (id, revision_datetime)
+          ) PARTITION BY RANGE (revision_datetime);
+          CREATE INDEX ix_revision_active__revision_key_datetime
+              ON revision_active (revision_key, revision_datetime DESC);
+          CREATE INDEX ix_revision_active__revision_entity_mrn_datetime
+              ON revision_active (revision_entity, mrn, revision_datetime DESC);
+          CREATE INDEX ix_revision_active__revision_datetime_brin
+              ON revision_active USING BRIN (revision_datetime);
+- changeSet:
+    id: revision-postgres-003-archive-table
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: revision_archive
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          CREATE TABLE revision_archive (
+              id BIGINT NOT NULL,
+              revision_key VARCHAR(255) NOT NULL,
+              mrn VARCHAR(100) NULL,
+              revision_entity VARCHAR(255) NULL,
+              revision_datetime TIMESTAMPTZ NOT NULL,
+              revision_data JSONB NOT NULL,
+              revision_change JSONB NULL,
+              created_by VARCHAR(200) NULL,
+              updated_by VARCHAR(200) NULL,
+              created_at TIMESTAMPTZ NULL,
+              updated_at TIMESTAMPTZ NULL,
+              PRIMARY KEY (id, revision_datetime)
+          ) PARTITION BY RANGE (revision_datetime);
+          CREATE INDEX ix_revision_archive__revision_key_datetime
+              ON revision_archive (revision_key, revision_datetime DESC);
+          CREATE INDEX ix_revision_archive__revision_datetime_brin
+              ON revision_archive USING BRIN (revision_datetime);
+- changeSet:
+    id: revision-postgres-004-bootstrap-active-partitions
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: revision_active
+    changes:
+    - sql:
+        splitStatements: false
+        sql: |
+          DO $$
+          DECLARE
+              i INT;
+              p_lo DATE;
+              p_hi DATE;
+              p_name TEXT;
+              anchor DATE := DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')::DATE;
+          BEGIN
+              FOR i IN -12..24 LOOP
+                  p_lo := anchor + (i || ' months')::INTERVAL;
+                  p_hi := p_lo + INTERVAL '1 month';
+                  p_name := 'revision_active_' || TO_CHAR(p_lo, 'YYYY_MM');
+                  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = p_name) THEN
+                      EXECUTE FORMAT(
+                          'CREATE TABLE %I PARTITION OF revision_active FOR VALUES FROM (%L) TO (%L)',
+                          p_name, p_lo, p_hi);
+                  END IF;
+              END LOOP;
+          END $$;
+- changeSet:
+    id: revision-postgres-005-seed-sequence-from-legacy
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    changes:
+    - sql:
+        sql: |
+          SELECT setval('revision_id_seq', COALESCE((SELECT MAX(id) FROM revision), 0) + 1, false);
+- changeSet:
+    id: revision-postgres-006-rename-legacy
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision
+    - not:
+        tableExists:
+          tableName: revision_legacy
+    changes:
+    - renameTable:
+        oldTableName: revision
+        newTableName: revision_legacy
+- changeSet:
+    id: revision-postgres-007-write-view
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision
+    - not:
+        tableExists:
+          tableName: revision
+    changes:
+    - createView:
+        viewName: revision
+        replaceIfExists: false
+        selectQuery: |
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_active
+- changeSet:
+    id: revision-postgres-008-history-view
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCutoverEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision_history
+    - tableExists:
+        tableName: revision_legacy
+    changes:
+    - createView:
+        viewName: revision_history
+        replaceIfExists: false
+        selectQuery: |
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_active
+          UNION ALL
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_archive
+          UNION ALL
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_legacy
+- changeSet:
+    id: revision-postgres-009-drop-history-view-pre-cleanup
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - viewExists:
+        viewName: revision_history
+    - tableExists:
+        tableName: revision_legacy
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM revision_legacy
+    changes:
+    - dropView:
+        viewName: revision_history
+- changeSet:
+    id: revision-postgres-010-drop-legacy-table
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - tableExists:
+        tableName: revision_legacy
+    - sqlCheck:
+        expectedResult: 0
+        sql: SELECT COUNT(*) FROM revision_legacy
+    - not:
+        viewExists:
+          viewName: revision_history
+    changes:
+    - dropTable:
+        tableName: revision_legacy
+- changeSet:
+    id: revision-postgres-011-history-view-post-cleanup
+    author: claude
+    dbms: postgresql
+    preConditions:
+    - onFail: CONTINUE
+    - onError: CONTINUE
+    - changeLogPropertyDefined:
+        property: revisionCleanupEnabled
+        value: "true"
+    - not:
+        viewExists:
+          viewName: revision_history
+    - not:
+        tableExists:
+          tableName: revision_legacy
+    changes:
+    - createView:
+        viewName: revision_history
+        replaceIfExists: false
+        selectQuery: |
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_active
+          UNION ALL
+          SELECT id, revision_key, mrn, revision_entity, revision_datetime,
+                 revision_data, revision_change,
+                 created_by, updated_by, created_at, updated_at
+          FROM revision_archive
