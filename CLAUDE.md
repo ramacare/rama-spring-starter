@@ -75,6 +75,10 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `rama.jpa.enabled` -- JPA entity scanning
 - `rama.static-values.enabled` -- Static value resolver
 - `rama.revision.enabled` -- Revision/audit trail
+- `rama.revision.clickhouse.enabled` -- Mirror revisions to ClickHouse (default `false`).
+  When `true`, listeners enqueue to `RevisionClickHouseSink` in addition to writing the SQL
+  `revision` table; `RevisionService.getStateAt` reads from ClickHouse. Requires
+  `rama.revision.clickhouse.url` (JDBC) and credentials. See `docs/clickhouse-revision.md`.
 - `rama.mongo.enabled` -- MongoDB sync
 - `rama.mongo.deferred-indexes-enabled` -- MongoDB deferred index creation
 - `rama.meilisearch.enabled` -- Meilisearch sync
