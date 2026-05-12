@@ -13,10 +13,13 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @Tag("unit")
@@ -64,5 +67,34 @@ class RevisionClickHouseRepositoryTest {
         List<ClickHouseRevisionRecord> result = repo.findHistory("Patient^id^1");
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void allReadQueries_shouldFilterOutListenerPlaceholderRows() {
+        // Listener fast-path writes carry id=0 and would otherwise duplicate the canonical
+        // id>0 rows shipped by the backfill job. All three read APIs must filter id>0 so
+        // duplicates don't leak into reader-facing results.
+        RevisionClickHouseRepository repo = new RevisionClickHouseRepository(jdbcTemplate, "revision");
+        OffsetDateTime now = OffsetDateTime.now();
+
+        when(jdbcTemplate.queryForObject(anyString(), any(RowMapper.class), any(), any()))
+                .thenReturn(null);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any()))
+                .thenReturn(List.of());
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(), any(), any()))
+                .thenReturn(List.of());
+
+        repo.getStateAt("k", now);
+        repo.findHistory("k");
+        repo.findByMrn("MRN1", now.minusDays(1), now);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForObject(sqlCaptor.capture(), any(RowMapper.class), any(), any());
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), any());
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), any(), any(), any());
+
+        for (String sql : sqlCaptor.getAllValues()) {
+            assertThat(sql).contains("id > 0");
+        }
     }
 }

@@ -233,4 +233,47 @@ class RevisionServiceTest {
         assertThat(result).isPresent();
         assertThat(result.get().getRevisionKey()).isEqualTo("k");
     }
+
+    @Test
+    void getStateAt_shouldDeserializeJsonPayloadsFromClickHouse() {
+        RevisionClickHouseRepository chRepo = mock(RevisionClickHouseRepository.class);
+        revisionService = new RevisionService(revisionRepository,
+                JsonMapper.builder().build(), chRepo);
+
+        OffsetDateTime at = OffsetDateTime.parse("2026-05-12T00:00:00Z");
+        ClickHouseRevisionRecord record = ClickHouseRevisionRecord.of(
+                42L, "Patient^id^1", "MRN1", "Patient", at,
+                "{\"name\":\"Jane\",\"age\":30}",
+                "{\"name\":\"Jane\"}",
+                null, null, null, null);
+        when(chRepo.getStateAt("Patient^id^1", at)).thenReturn(Optional.of(record));
+
+        Optional<Revision> result = revisionService.getStateAt("Patient^id^1", at);
+
+        assertThat(result).isPresent();
+        Revision rev = result.get();
+        assertThat(rev.getRevisionData()).isNotNull();
+        assertThat(rev.getRevisionData()).containsEntry("name", "Jane").containsEntry("age", 30);
+        assertThat(rev.getRevisionChange()).isNotNull();
+        assertThat(rev.getRevisionChange()).containsEntry("name", "Jane");
+    }
+
+    @Test
+    void getStateAt_shouldLeaveJsonNull_whenPayloadEmpty() {
+        RevisionClickHouseRepository chRepo = mock(RevisionClickHouseRepository.class);
+        revisionService = new RevisionService(revisionRepository,
+                JsonMapper.builder().build(), chRepo);
+
+        OffsetDateTime at = OffsetDateTime.now();
+        ClickHouseRevisionRecord record = ClickHouseRevisionRecord.of(
+                42L, "k", null, "Entity", at, null, null,
+                null, null, null, null);
+        when(chRepo.getStateAt("k", at)).thenReturn(Optional.of(record));
+
+        Optional<Revision> result = revisionService.getStateAt("k", at);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getRevisionData()).isNull();
+        assertThat(result.get().getRevisionChange()).isNull();
+    }
 }

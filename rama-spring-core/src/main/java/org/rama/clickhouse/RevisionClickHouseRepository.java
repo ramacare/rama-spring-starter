@@ -25,13 +25,22 @@ public class RevisionClickHouseRepository {
         this.tableName = ClickHouseSchemaInitializer.safeIdent(tableName);
     }
 
+    // Listener fast-path writes carry id=0 because the generated SQL revision id
+    // isn't available at @AfterCommit time (the @Async save hasn't returned). Those
+    // rows duplicate the canonical id>0 rows that the backfill job ships from SQL.
+    // MergeTree doesn't deduplicate, so reads MUST filter out id=0 to avoid the
+    // duplicate-row problem. The id=0 rows remain visible to direct diagnostic
+    // queries against ClickHouse for ops observability.
+    private static final String COLUMNS =
+            "id, revision_key, mrn, revision_entity, revision_datetime,"
+                    + " revision_data, revision_change,"
+                    + " created_by, updated_by, created_at, updated_at";
+
     /** Latest revision at or before {@code at} for the given key. Empty when no row matches. */
     public Optional<ClickHouseRevisionRecord> getStateAt(String revisionKey, OffsetDateTime at) {
-        String sql = "SELECT id, revision_key, mrn, revision_entity, revision_datetime,"
-                + " revision_data, revision_change,"
-                + " created_by, updated_by, created_at, updated_at"
+        String sql = "SELECT " + COLUMNS
                 + " FROM " + tableName
-                + " WHERE revision_key = ? AND revision_datetime <= ?"
+                + " WHERE id > 0 AND revision_key = ? AND revision_datetime <= ?"
                 + " ORDER BY revision_datetime DESC LIMIT 1";
         try {
             return Optional.ofNullable(jdbcTemplate.queryForObject(
@@ -43,22 +52,18 @@ public class RevisionClickHouseRepository {
 
     /** Full history for one key, newest first. */
     public List<ClickHouseRevisionRecord> findHistory(String revisionKey) {
-        String sql = "SELECT id, revision_key, mrn, revision_entity, revision_datetime,"
-                + " revision_data, revision_change,"
-                + " created_by, updated_by, created_at, updated_at"
+        String sql = "SELECT " + COLUMNS
                 + " FROM " + tableName
-                + " WHERE revision_key = ?"
+                + " WHERE id > 0 AND revision_key = ?"
                 + " ORDER BY revision_datetime DESC";
         return jdbcTemplate.query(sql, ROW_MAPPER, revisionKey);
     }
 
     /** All revisions for a patient (mrn) within a time range, newest first. */
     public List<ClickHouseRevisionRecord> findByMrn(String mrn, OffsetDateTime from, OffsetDateTime to) {
-        String sql = "SELECT id, revision_key, mrn, revision_entity, revision_datetime,"
-                + " revision_data, revision_change,"
-                + " created_by, updated_by, created_at, updated_at"
+        String sql = "SELECT " + COLUMNS
                 + " FROM " + tableName
-                + " WHERE mrn = ? AND revision_datetime >= ? AND revision_datetime <= ?"
+                + " WHERE id > 0 AND mrn = ? AND revision_datetime >= ? AND revision_datetime <= ?"
                 + " ORDER BY revision_datetime DESC";
         return jdbcTemplate.query(sql, ROW_MAPPER, mrn,
                 Timestamp.from(from.toInstant()), Timestamp.from(to.toInstant()));

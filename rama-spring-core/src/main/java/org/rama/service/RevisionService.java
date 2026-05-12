@@ -134,7 +134,7 @@ public class RevisionService {
         if (clickHouseRepository != null) {
             try {
                 Optional<ClickHouseRevisionRecord> chResult = clickHouseRepository.getStateAt(revisionKey, at);
-                return chResult.map(RevisionService::fromClickHouse);
+                return chResult.map(this::fromClickHouse);
             } catch (RuntimeException e) {
                 // Fail-soft: any ClickHouse read error falls back to JPA. Audit reads
                 // must keep working even when the analytical store is unavailable.
@@ -146,19 +146,39 @@ public class RevisionService {
                 .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc(revisionKey, at);
     }
 
-    private static Revision fromClickHouse(ClickHouseRevisionRecord r) {
+    @SuppressWarnings("unchecked")
+    private Revision fromClickHouse(ClickHouseRevisionRecord r) {
         Revision rev = new Revision();
         // id field in Revision is Long (boxed). Treat ClickHouse 0L (placeholder used by listeners)
-        // as null so JPA-style equality stays consistent.
+        // as null so JPA-style equality stays consistent. Listener rows are also filtered at
+        // the repository level (WHERE id > 0), so in practice this null path is unreachable
+        // for canonical reads — it remains as defense against direct callers passing id=0.
         rev.setId(r.id() == 0 ? null : r.id());
         rev.setRevisionKey(r.revisionKey());
         rev.setMrn(r.mrn());
         rev.setRevisionEntity(r.revisionEntity());
         rev.setRevisionDatetime(r.revisionDatetime());
-        // revisionData / revisionChange are JSON strings in ClickHouse; deserialize lazily if a
-        // future caller actually needs them. For now keep the entity's Map fields null so
-        // downstream callers don't accidentally diff strings against maps.
+        // Deserialize the JSON payloads. On failure or null input, leave the map field
+        // unset on the entity — the caller still gets a usable Revision with key/mrn/datetime;
+        // the payload is just absent. Note: Revision.revisionData is annotated @NonNull
+        // (Lombok generates a setter that throws on null), so we MUST skip the setter
+        // when parse returns null.
+        Map<String, Object> data = parseJsonMap(r.revisionData(), r.revisionKey(), "revision_data");
+        if (data != null) rev.setRevisionData(data);
+        rev.setRevisionChange(parseJsonMap(r.revisionChange(), r.revisionKey(), "revision_change"));
         return rev;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonMap(String json, String contextKey, String column) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (RuntimeException e) {
+            log.warn("Failed to deserialize ClickHouse {} for revisionKey={}; returning null. Cause: {}",
+                    column, contextKey, e.getMessage());
+            return null;
+        }
     }
 
     /**
