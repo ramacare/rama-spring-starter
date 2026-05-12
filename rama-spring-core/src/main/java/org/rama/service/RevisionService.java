@@ -5,8 +5,11 @@ import org.hibernate.event.spi.PostUpdateEvent;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.type.Type;
 import org.rama.clickhouse.ClickHouseRevisionRecord;
+import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.entity.Revision;
 import org.rama.repository.revision.RevisionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -16,16 +19,26 @@ import java.time.OffsetDateTime;
 import java.util.*;
 
 public class RevisionService {
+    private static final Logger log = LoggerFactory.getLogger(RevisionService.class);
+
     private final RevisionRepository revisionRepository;
     private final ObjectMapper objectMapper;
+    private final RevisionClickHouseRepository clickHouseRepository; // nullable
 
     public RevisionService(RevisionRepository revisionRepository) {
-        this(revisionRepository, JsonMapper.builder().build());
+        this(revisionRepository, JsonMapper.builder().build(), null);
     }
 
     public RevisionService(RevisionRepository revisionRepository, ObjectMapper objectMapper) {
+        this(revisionRepository, objectMapper, null);
+    }
+
+    public RevisionService(RevisionRepository revisionRepository,
+                           ObjectMapper objectMapper,
+                           RevisionClickHouseRepository clickHouseRepository) {
         this.revisionRepository = revisionRepository;
         this.objectMapper = objectMapper;
+        this.clickHouseRepository = clickHouseRepository;
     }
 
     @Async
@@ -108,6 +121,44 @@ public class RevisionService {
             }
         }
         return original;
+    }
+
+    /**
+     * Return the latest revision at or before {@code at} for the given key.
+     * <p>When a {@link RevisionClickHouseRepository} is configured, the query is dispatched
+     * there first. Any {@link RuntimeException} (e.g. ClickHouse unavailable) is caught,
+     * logged at WARN, and the method falls back to the JPA repository so audit reads keep
+     * working even when the analytical store is down.
+     */
+    public Optional<Revision> getStateAt(String revisionKey, OffsetDateTime at) {
+        if (clickHouseRepository != null) {
+            try {
+                Optional<ClickHouseRevisionRecord> chResult = clickHouseRepository.getStateAt(revisionKey, at);
+                return chResult.map(RevisionService::fromClickHouse);
+            } catch (RuntimeException e) {
+                // Fail-soft: any ClickHouse read error falls back to JPA. Audit reads
+                // must keep working even when the analytical store is unavailable.
+                log.warn("ClickHouse getStateAt failed; falling back to JPA for key={}, at={}. Cause: {}",
+                        revisionKey, at, e.getMessage());
+            }
+        }
+        return revisionRepository
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc(revisionKey, at);
+    }
+
+    private static Revision fromClickHouse(ClickHouseRevisionRecord r) {
+        Revision rev = new Revision();
+        // id field in Revision is Long (boxed). Treat ClickHouse 0L (placeholder used by listeners)
+        // as null so JPA-style equality stays consistent.
+        rev.setId(r.id() == 0 ? null : r.id());
+        rev.setRevisionKey(r.revisionKey());
+        rev.setMrn(r.mrn());
+        rev.setRevisionEntity(r.revisionEntity());
+        rev.setRevisionDatetime(r.revisionDatetime());
+        // revisionData / revisionChange are JSON strings in ClickHouse; deserialize lazily if a
+        // future caller actually needs them. For now keep the entity's Map fields null so
+        // downstream callers don't accidentally diff strings against maps.
+        return rev;
     }
 
     /**

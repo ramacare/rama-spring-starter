@@ -32,6 +32,7 @@ import org.rama.listener.global.GlobalPostInsertEntityEventListener;
 import org.rama.listener.global.GlobalPostInsertRevisionListener;
 import org.rama.listener.global.GlobalPostUpdateEntityEventListener;
 import org.rama.listener.global.GlobalPostUpdateRevisionListener;
+import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.clickhouse.RevisionClickHouseSink;
 import org.rama.meilisearch.MeilisearchIndexInitializer;
 import org.rama.meilisearch.listener.GlobalPostInsertMeilisearchListener;
@@ -250,8 +251,11 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnBean(RevisionRepository.class)
     @ConditionalOnProperty(prefix = "rama.revision", name = "enabled", havingValue = "true", matchIfMissing = true)
-    RevisionService revisionService(RevisionRepository revisionRepository) {
-        return new RevisionService(revisionRepository);
+    RevisionService revisionService(RevisionRepository revisionRepository,
+                                    ObjectProvider<RevisionClickHouseRepository> clickHouseRepoProvider) {
+        return new RevisionService(revisionRepository,
+                JsonMapper.builder().build(),
+                clickHouseRepoProvider.getIfAvailable());
     }
 
     @Bean

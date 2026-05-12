@@ -11,11 +11,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.rama.clickhouse.ClickHouseRevisionRecord;
+import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.entity.Revision;
 import org.rama.repository.revision.RevisionRepository;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -170,5 +175,62 @@ class RevisionServiceTest {
         // Assert - entity type properties should be skipped
         assertThat(dirty).containsKey("name");
         assertThat(dirty).doesNotContainKey("relatedEntity");
+    }
+
+    @Test
+    void getStateAt_shouldDispatchToClickHouseRepository_whenAvailable() {
+        RevisionClickHouseRepository chRepo = mock(RevisionClickHouseRepository.class);
+        revisionService = new RevisionService(revisionRepository,
+                JsonMapper.builder().build(), chRepo);
+
+        OffsetDateTime at = OffsetDateTime.parse("2026-05-12T00:00:00Z");
+        ClickHouseRevisionRecord record = ClickHouseRevisionRecord.of(
+                7L, "Patient^id^1", null, "Patient", at, "{}", null, null, null, null, null);
+        when(chRepo.getStateAt("Patient^id^1", at)).thenReturn(Optional.of(record));
+
+        Optional<Revision> result = revisionService.getStateAt("Patient^id^1", at);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getRevisionKey()).isEqualTo("Patient^id^1");
+        verifyNoInteractions(revisionRepository);
+    }
+
+    @Test
+    void getStateAt_shouldFallBackToJpaRepository_whenClickHouseAbsent() {
+        revisionService = new RevisionService(revisionRepository,
+                JsonMapper.builder().build(), null);
+
+        OffsetDateTime at = OffsetDateTime.now();
+        when(revisionRepository
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc("k", at))
+                .thenReturn(Optional.of(new Revision()));
+
+        revisionService.getStateAt("k", at);
+
+        verify(revisionRepository)
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc("k", at);
+    }
+
+    @Test
+    void getStateAt_shouldFallBackToJpa_whenClickHouseThrows() {
+        RevisionClickHouseRepository chRepo = mock(RevisionClickHouseRepository.class);
+        revisionService = new RevisionService(revisionRepository,
+                JsonMapper.builder().build(), chRepo);
+
+        OffsetDateTime at = OffsetDateTime.now();
+        when(chRepo.getStateAt("k", at))
+                .thenThrow(new org.springframework.dao.DataAccessResourceFailureException(
+                        "ClickHouse unavailable"));
+        Revision fallback = new Revision();
+        fallback.setRevisionKey("k");
+        when(revisionRepository
+                .findFirstByRevisionKeyAndRevisionDatetimeLessThanEqualOrderByRevisionDatetimeDesc("k", at))
+                .thenReturn(Optional.of(fallback));
+
+        Optional<Revision> result = revisionService.getStateAt("k", at);
+
+        // Read MUST succeed via SQL fallback even when ClickHouse is broken.
+        assertThat(result).isPresent();
+        assertThat(result.get().getRevisionKey()).isEqualTo("k");
     }
 }
