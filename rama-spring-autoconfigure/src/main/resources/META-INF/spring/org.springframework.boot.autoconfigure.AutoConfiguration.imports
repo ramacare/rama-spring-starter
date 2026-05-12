@@ -1,3 +1,4 @@
 org.rama.autoconfigure.RamaMongoConversionsAutoConfiguration
 org.rama.autoconfigure.RamaStarterAutoConfiguration
 org.rama.autoconfigure.RamaStarterSecurityAutoConfiguration
+org.rama.autoconfigure.RamaStarterClickHouseAutoConfiguration
