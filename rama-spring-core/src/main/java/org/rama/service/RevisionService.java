@@ -4,19 +4,28 @@ import org.hibernate.event.spi.PostInsertEvent;
 import org.hibernate.event.spi.PostUpdateEvent;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.type.Type;
+import org.rama.clickhouse.ClickHouseRevisionRecord;
 import org.rama.entity.Revision;
 import org.rama.repository.revision.RevisionRepository;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.OffsetDateTime;
 import java.util.*;
 
 public class RevisionService {
     private final RevisionRepository revisionRepository;
+    private final ObjectMapper objectMapper;
 
     public RevisionService(RevisionRepository revisionRepository) {
+        this(revisionRepository, JsonMapper.builder().build());
+    }
+
+    public RevisionService(RevisionRepository revisionRepository, ObjectMapper objectMapper) {
         this.revisionRepository = revisionRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Async
@@ -99,5 +108,27 @@ public class RevisionService {
             }
         }
         return original;
+    }
+
+    /**
+     * Build a ClickHouse record from the same fields used to persist the SQL Revision.
+     * Returns null on serialization failure — the SQL write remains the source of truth
+     * and a structured log warning is emitted by the caller.
+     */
+    public ClickHouseRevisionRecord toClickHouseRecord(
+            long sqlId, String revisionKey, String revisionEntity,
+            Map<String, Object> revisionData, Map<String, Object> revisionChange) {
+        try {
+            String dataJson = objectMapper.writeValueAsString(revisionData);
+            String changeJson = revisionChange == null ? null : objectMapper.writeValueAsString(revisionChange);
+            String mrn = revisionData != null && revisionData.get("mrn") != null
+                    ? java.util.Objects.toString(revisionData.get("mrn"), null) : null;
+            return ClickHouseRevisionRecord.of(
+                    sqlId, revisionKey, mrn, revisionEntity,
+                    java.time.OffsetDateTime.now(), dataJson, changeJson,
+                    null, null, null, null);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 }

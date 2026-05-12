@@ -9,22 +9,33 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.rama.annotation.TrackRevision;
+import org.rama.clickhouse.ClickHouseRevisionRecord;
+import org.rama.clickhouse.RevisionClickHouseSink;
 import org.rama.entity.master.MasterItem;
 import org.rama.service.RevisionService;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.time.OffsetDateTime;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class RevisionListenerTest {
 
     @Mock
     private ObjectProvider<RevisionService> revisionServiceProvider;
+
+    @Mock
+    private ObjectProvider<RevisionClickHouseSink> clickHouseSinkProvider;
 
     @Mock
     private RevisionService revisionService;
@@ -32,7 +43,7 @@ class RevisionListenerTest {
     @Test
     void postInsert_shouldSaveRevision_forAnnotatedEntity() {
         when(revisionServiceProvider.getIfAvailable()).thenReturn(revisionService);
-        GlobalPostInsertRevisionListener listener = new GlobalPostInsertRevisionListener(revisionServiceProvider);
+        GlobalPostInsertRevisionListener listener = new GlobalPostInsertRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
 
         MasterItem entity = new MasterItem("$Test", "001", "Value");
         PostInsertEvent event = mock(PostInsertEvent.class);
@@ -53,7 +64,7 @@ class RevisionListenerTest {
 
     @Test
     void postInsert_shouldNotSaveRevision_forNonAnnotatedEntity() {
-        GlobalPostInsertRevisionListener listener = new GlobalPostInsertRevisionListener(revisionServiceProvider);
+        GlobalPostInsertRevisionListener listener = new GlobalPostInsertRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
 
         Object plainEntity = new Object();
         PostInsertEvent event = mock(PostInsertEvent.class);
@@ -67,7 +78,7 @@ class RevisionListenerTest {
     @Test
     void postInsert_shouldNotFail_whenRevisionServiceIsUnavailable() {
         when(revisionServiceProvider.getIfAvailable()).thenReturn(null);
-        GlobalPostInsertRevisionListener listener = new GlobalPostInsertRevisionListener(revisionServiceProvider);
+        GlobalPostInsertRevisionListener listener = new GlobalPostInsertRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
 
         MasterItem entity = new MasterItem("$Test", "001", "Value");
         PostInsertEvent event = mock(PostInsertEvent.class);
@@ -80,7 +91,7 @@ class RevisionListenerTest {
     @Test
     void postUpdate_shouldSaveRevision_forAnnotatedEntity() {
         when(revisionServiceProvider.getIfAvailable()).thenReturn(revisionService);
-        GlobalPostUpdateRevisionListener listener = new GlobalPostUpdateRevisionListener(revisionServiceProvider);
+        GlobalPostUpdateRevisionListener listener = new GlobalPostUpdateRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
 
         MasterItem entity = new MasterItem("$Test", "001", "Value");
         PostUpdateEvent event = mock(PostUpdateEvent.class);
@@ -103,7 +114,7 @@ class RevisionListenerTest {
 
     @Test
     void postUpdate_shouldNotSaveRevision_forNonAnnotatedEntity() {
-        GlobalPostUpdateRevisionListener listener = new GlobalPostUpdateRevisionListener(revisionServiceProvider);
+        GlobalPostUpdateRevisionListener listener = new GlobalPostUpdateRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
 
         Object plainEntity = new Object();
         PostUpdateEvent event = mock(PostUpdateEvent.class);
@@ -116,11 +127,44 @@ class RevisionListenerTest {
 
     @Test
     void requiresPostCommitHandling_shouldReturnFalse() {
-        GlobalPostInsertRevisionListener insertListener = new GlobalPostInsertRevisionListener(revisionServiceProvider);
-        GlobalPostUpdateRevisionListener updateListener = new GlobalPostUpdateRevisionListener(revisionServiceProvider);
+        GlobalPostInsertRevisionListener insertListener = new GlobalPostInsertRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
+        GlobalPostUpdateRevisionListener updateListener = new GlobalPostUpdateRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
         EntityPersister persister = mock(EntityPersister.class);
 
         assertThat(insertListener.requiresPostCommitHandling(persister)).isFalse();
         assertThat(updateListener.requiresPostCommitHandling(persister)).isFalse();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void postInsert_shouldAlsoEnqueueToClickHouseSink_whenAvailable() {
+        when(revisionServiceProvider.getIfAvailable()).thenReturn(revisionService);
+        RevisionClickHouseSink sink = mock(RevisionClickHouseSink.class);
+        when(clickHouseSinkProvider.getIfAvailable()).thenReturn(sink);
+
+        ClickHouseRevisionRecord chRecord = ClickHouseRevisionRecord.of(
+                0L, "key", null, "MasterItem", OffsetDateTime.now(),
+                "{}", null, null, null, null, null);
+        when(revisionService.toClickHouseRecord(eq(0L), eq("key"), eq("MasterItem"),
+                any(Map.class), eq((Map<String, Object>) null)))
+                .thenReturn(chRecord);
+
+        MasterItem entity = new MasterItem("$Test", "001", "Value");
+        PostInsertEvent event = mock(PostInsertEvent.class);
+        EntityPersister persister = mock(EntityPersister.class);
+        when(event.getEntity()).thenReturn(entity);
+        when(event.getPersister()).thenReturn(persister);
+        when(event.getId()).thenReturn("testId");
+        when(revisionService.buildRevisionKey(persister, "testId")).thenReturn("key");
+        when(persister.getEntityName()).thenReturn("org.rama.entity.master.MasterItem");
+        when(revisionService.resolveEntityName("org.rama.entity.master.MasterItem")).thenReturn("MasterItem");
+        when(revisionService.extractInsertData(event)).thenReturn(Map.of("test", "data"));
+
+        GlobalPostInsertRevisionListener listener =
+                new GlobalPostInsertRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
+
+        listener.onPostInsert(event);
+
+        verify(sink).offer(chRecord);
     }
 }

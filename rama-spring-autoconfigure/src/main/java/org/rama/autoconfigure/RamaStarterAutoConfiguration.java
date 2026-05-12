@@ -32,6 +32,7 @@ import org.rama.listener.global.GlobalPostInsertEntityEventListener;
 import org.rama.listener.global.GlobalPostInsertRevisionListener;
 import org.rama.listener.global.GlobalPostUpdateEntityEventListener;
 import org.rama.listener.global.GlobalPostUpdateRevisionListener;
+import org.rama.clickhouse.RevisionClickHouseSink;
 import org.rama.meilisearch.MeilisearchIndexInitializer;
 import org.rama.meilisearch.listener.GlobalPostInsertMeilisearchListener;
 import org.rama.meilisearch.listener.GlobalPostUpdateMeilisearchListener;
@@ -451,15 +452,19 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.revision", name = "enabled", havingValue = "true", matchIfMissing = true)
-    GlobalPostInsertRevisionListener globalPostInsertRevisionListener(ObjectProvider<RevisionService> revisionServiceProvider) {
-        return new GlobalPostInsertRevisionListener(revisionServiceProvider);
+    GlobalPostInsertRevisionListener globalPostInsertRevisionListener(
+            ObjectProvider<RevisionService> revisionServiceProvider,
+            ObjectProvider<RevisionClickHouseSink> clickHouseSinkProvider) {
+        return new GlobalPostInsertRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
     }
 
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.revision", name = "enabled", havingValue = "true", matchIfMissing = true)
-    GlobalPostUpdateRevisionListener globalPostUpdateRevisionListener(ObjectProvider<RevisionService> revisionServiceProvider) {
-        return new GlobalPostUpdateRevisionListener(revisionServiceProvider);
+    GlobalPostUpdateRevisionListener globalPostUpdateRevisionListener(
+            ObjectProvider<RevisionService> revisionServiceProvider,
+            ObjectProvider<RevisionClickHouseSink> clickHouseSinkProvider) {
+        return new GlobalPostUpdateRevisionListener(revisionServiceProvider, clickHouseSinkProvider);
     }
 
     @Bean

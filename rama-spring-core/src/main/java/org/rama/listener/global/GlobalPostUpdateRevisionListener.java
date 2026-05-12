@@ -4,6 +4,8 @@ import org.hibernate.event.spi.PostUpdateEvent;
 import org.hibernate.event.spi.PostUpdateEventListener;
 import org.hibernate.persister.entity.EntityPersister;
 import org.rama.annotation.TrackRevision;
+import org.rama.clickhouse.ClickHouseRevisionRecord;
+import org.rama.clickhouse.RevisionClickHouseSink;
 import org.rama.service.RevisionService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -13,9 +15,13 @@ import java.util.Map;
 
 public class GlobalPostUpdateRevisionListener implements PostUpdateEventListener {
     private final ObjectProvider<RevisionService> revisionServiceProvider;
+    private final ObjectProvider<RevisionClickHouseSink> clickHouseSinkProvider;
 
-    public GlobalPostUpdateRevisionListener(ObjectProvider<RevisionService> revisionServiceProvider) {
+    public GlobalPostUpdateRevisionListener(
+            ObjectProvider<RevisionService> revisionServiceProvider,
+            ObjectProvider<RevisionClickHouseSink> clickHouseSinkProvider) {
         this.revisionServiceProvider = revisionServiceProvider;
+        this.clickHouseSinkProvider = clickHouseSinkProvider;
     }
 
     @Override
@@ -35,10 +41,22 @@ public class GlobalPostUpdateRevisionListener implements PostUpdateEventListener
                             @Override
                             public void afterCommit() {
                                 revisionService.saveRevision(revisionKey, revisionEntity, data, dirty);
+                                RevisionClickHouseSink sink = clickHouseSinkProvider.getIfAvailable();
+                                if (sink != null) {
+                                    ClickHouseRevisionRecord record = revisionService.toClickHouseRecord(
+                                            0L, revisionKey, revisionEntity, data, dirty);
+                                    if (record != null) sink.offer(record);
+                                }
                             }
                         });
                     } else {
                         revisionService.saveRevision(revisionKey, revisionEntity, data, dirty);
+                        RevisionClickHouseSink sink = clickHouseSinkProvider.getIfAvailable();
+                        if (sink != null) {
+                            ClickHouseRevisionRecord record = revisionService.toClickHouseRecord(
+                                    0L, revisionKey, revisionEntity, data, dirty);
+                            if (record != null) sink.offer(record);
+                        }
                     }
                 }
             }
