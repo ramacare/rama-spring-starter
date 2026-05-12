@@ -2,6 +2,7 @@ package org.rama.autoconfigure;
 
 import com.zaxxer.hikari.HikariDataSource;
 import org.rama.clickhouse.ClickHouseSchemaInitializer;
+import org.rama.clickhouse.RevisionClickHouseBackfillJob;
 import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.clickhouse.RevisionClickHouseSink;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -72,5 +73,15 @@ public class RamaStarterClickHouseAutoConfiguration {
             @Qualifier("clickHouseJdbcTemplate") JdbcTemplate jdbc,
             ClickHouseProperties props) {
         return new RevisionClickHouseRepository(jdbc, props.getTableName());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RevisionClickHouseBackfillJob revisionClickHouseBackfillJob(
+            JdbcTemplate jdbcTemplate,
+            @Qualifier("clickHouseJdbcTemplate") JdbcTemplate chJdbc,
+            RevisionClickHouseSink sink,
+            ClickHouseProperties props) {
+        return new RevisionClickHouseBackfillJob(jdbcTemplate, chJdbc, sink, props.getTableName());
     }
 }
