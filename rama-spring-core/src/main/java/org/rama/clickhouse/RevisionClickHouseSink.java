@@ -129,6 +129,18 @@ public class RevisionClickHouseSink {
         }
     }
 
+    /**
+     * Time-triggered flush. Wired by the auto-config with the
+     * {@code rama.revision.clickhouse.flush-interval} cadence (default 5s).
+     * Uses the same {@link #flush()} as the size trigger; the only difference
+     * is who calls it.
+     */
+    @org.springframework.scheduling.annotation.Scheduled(
+            fixedDelayString = "${rama.revision.clickhouse.flush-interval:PT5S}")
+    public void scheduledFlush() {
+        flush();
+    }
+
     public synchronized int queueSize() {
         return buffer.size();
     }

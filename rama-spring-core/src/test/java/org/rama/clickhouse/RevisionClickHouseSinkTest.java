@@ -117,6 +117,25 @@ class RevisionClickHouseSinkTest {
         assertThat(sink.queueSize()).isZero();
     }
 
+    @Test
+    void scheduledFlush_shouldFlushPendingRows() {
+        sink.offer(record(1L));
+        sink.offer(record(2L));
+
+        sink.scheduledFlush();
+
+        verify(jdbcTemplate).batchUpdate(
+                startsWith("INSERT INTO revision"),
+                any(BatchPreparedStatementSetter.class));
+        assertThat(sink.queueSize()).isZero();
+    }
+
+    @Test
+    void scheduledFlush_shouldBeNoopWhenEmpty() {
+        sink.scheduledFlush();
+        verify(jdbcTemplate, never()).batchUpdate(any(String.class), any(BatchPreparedStatementSetter.class));
+    }
+
     private static ClickHouseRevisionRecord record(long id) {
         return ClickHouseRevisionRecord.of(
                 id, "Entity^id^" + id, null, "Entity",
