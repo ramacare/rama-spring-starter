@@ -2,9 +2,6 @@ package org.rama.demo.clickhouse;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.quartz.JobDataMap;
-import org.quartz.JobExecutionContext;
 import org.rama.clickhouse.ClickHouseRevisionRecord;
 import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.demo.entity.book.Book;
@@ -61,12 +58,8 @@ class RevisionOutboxClickHouseIntegrationIT {
                 bookRepository.saveAndFlush(new Book("Outbox Test")));
 
         // Force a drain run directly instead of scheduling (demo excludes Quartz auto-config).
-        JobExecutionContext mockContext = Mockito.mock(JobExecutionContext.class);
-        JobDataMap jobDataMap = new JobDataMap();
-        Mockito.when(mockContext.getMergedJobDataMap()).thenReturn(jobDataMap);
-
         SystemBufferDrainJob drainJob = new SystemBufferDrainJob(systemBufferRepository, dispatchers);
-        drainJob.executeInternal(mockContext);
+        drainJob.drainAll(1000);
 
         String revisionKey = "org.rama.demo.entity.book.Book^id^" + book.getId();
 

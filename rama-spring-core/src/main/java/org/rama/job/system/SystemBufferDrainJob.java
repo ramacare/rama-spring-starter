@@ -44,10 +44,18 @@ public class SystemBufferDrainJob extends QuartzJobBean {
 
     @Override
     @Transactional
-    public void executeInternal(JobExecutionContext context) {
+    protected void executeInternal(JobExecutionContext context) {
         int batchSize = context.getMergedJobDataMap().containsKey(KEY_BATCH_SIZE)
                 ? context.getMergedJobDataMap().getIntValue(KEY_BATCH_SIZE) : DEFAULT_BATCH_SIZE;
+        drainAll(batchSize);
+    }
 
+    /**
+     * Drain every registered dispatcher's pending rows. Public entry-point for
+     * tests and ad-hoc invocation; production scheduling uses {@link #executeInternal}.
+     */
+    @Transactional
+    public void drainAll(int batchSize) {
         for (Map.Entry<String, SystemBufferDispatcher> e : dispatchersByType.entrySet()) {
             drainOne(e.getKey(), e.getValue(), batchSize);
         }
