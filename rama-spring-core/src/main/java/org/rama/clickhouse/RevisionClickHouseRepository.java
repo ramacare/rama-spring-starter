@@ -49,6 +49,25 @@ public class RevisionClickHouseRepository {
         return jdbcTemplate.query(sql, ROW_MAPPER, revisionKey);
     }
 
+    public List<ClickHouseRevisionRecord> findByEntityAndMrn(String revisionEntity, String mrn) {
+        String sql = "SELECT " + COLUMNS + " FROM " + tableName + " FINAL"
+                + " WHERE revision_entity = ? AND mrn = ?"
+                + " ORDER BY revision_datetime DESC";
+        return jdbcTemplate.query(sql, ROW_MAPPER, revisionEntity, mrn);
+    }
+
+    public List<ClickHouseRevisionRecord> findByEntityInAndMrn(List<String> revisionEntities, String mrn) {
+        if (revisionEntities == null || revisionEntities.isEmpty()) return List.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(revisionEntities.size(), "?"));
+        String sql = "SELECT " + COLUMNS + " FROM " + tableName + " FINAL"
+                + " WHERE revision_entity IN (" + placeholders + ") AND mrn = ?"
+                + " ORDER BY revision_datetime DESC";
+        Object[] params = new Object[revisionEntities.size() + 1];
+        for (int i = 0; i < revisionEntities.size(); i++) params[i] = revisionEntities.get(i);
+        params[revisionEntities.size()] = mrn;
+        return jdbcTemplate.query(sql, ROW_MAPPER, params);
+    }
+
     public List<ClickHouseRevisionRecord> findByMrn(String mrn, OffsetDateTime from, OffsetDateTime to) {
         String sql = "SELECT " + COLUMNS + " FROM " + tableName + " FINAL"
                 + " WHERE mrn = ? AND revision_datetime >= ? AND revision_datetime <= ?"
