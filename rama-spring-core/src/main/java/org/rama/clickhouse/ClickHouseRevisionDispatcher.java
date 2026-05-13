@@ -1,6 +1,5 @@
 package org.rama.clickhouse;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.rama.entity.system.SystemBuffer;
 import org.rama.service.system.SystemBufferDispatcher;
@@ -21,7 +20,6 @@ import java.util.Map;
  * {@link SystemBufferDispatcher} for buffer_type="revision".
  */
 @Slf4j
-@RequiredArgsConstructor
 public class ClickHouseRevisionDispatcher implements SystemBufferDispatcher {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
@@ -30,13 +28,18 @@ public class ClickHouseRevisionDispatcher implements SystemBufferDispatcher {
     private final String tableName;
     private final ObjectMapper objectMapper;
 
+    public ClickHouseRevisionDispatcher(JdbcTemplate clickHouseJdbcTemplate, String tableName, ObjectMapper objectMapper) {
+        this.clickHouseJdbcTemplate = clickHouseJdbcTemplate;
+        this.tableName = ClickHouseSchemaInitializer.safeIdent(tableName);
+        this.objectMapper = objectMapper;
+    }
+
     @Override
     public String bufferType() { return "revision"; }
 
     @Override
     public void dispatch(List<SystemBuffer> batch) {
-        String safe = ClickHouseSchemaInitializer.safeIdent(tableName);
-        String sql = "INSERT INTO " + safe + " ("
+        String sql = "INSERT INTO " + tableName + " ("
                 + "revision_key, revision_datetime, revision_entity, mrn,"
                 + " revision_data, revision_change, created_by, updated_by)"
                 + " VALUES (?,?,?,?,?,?,?,?)";

@@ -8,6 +8,7 @@ import org.hibernate.type.Type;
 import org.rama.clickhouse.ClickHouseRevisionRecord;
 import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.entity.Revision;
+import org.rama.entity.UserstampField;
 import org.rama.service.system.SystemBufferService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Propagation;
@@ -59,6 +60,11 @@ public class RevisionService {
         payload.put("revisionChange", revisionChange);
         if (revisionData.containsKey("mrn")) {
             payload.put("mrn", Objects.toString(revisionData.get("mrn"), null));
+        }
+        Object userstamp = revisionData.get("userstampField");
+        if (userstamp instanceof UserstampField u) {
+            if (u.getCreatedBy() != null) payload.put("createdBy", u.getCreatedBy());
+            if (u.getUpdatedBy() != null) payload.put("updatedBy", u.getUpdatedBy());
         }
 
         String json;

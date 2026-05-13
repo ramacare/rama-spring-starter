@@ -24,9 +24,7 @@ import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
 import org.rama.entity.system.SystemBuffer;
 import org.rama.repository.system.SystemBufferRepository;
-import org.rama.service.system.SystemBufferDispatcher;
 import org.rama.service.system.SystemBufferService;
-import org.rama.job.system.SystemBufferDrainJob;
 import org.rama.ftp.FtpProperties;
 import org.rama.graphql.StarterGraphqlExceptionResolver;
 import org.rama.graphql.directive.AuthDirectiveInstrumentation;
@@ -265,15 +263,6 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(SystemBufferRepository.class)
     SystemBufferService systemBufferService(SystemBufferRepository systemBufferRepository) {
         return new SystemBufferService(systemBufferRepository);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnBean(SystemBufferRepository.class)
-    SystemBufferDrainJob systemBufferDrainJob(
-            SystemBufferRepository systemBufferRepository,
-            ObjectProvider<SystemBufferDispatcher> dispatchers) {
-        return new SystemBufferDrainJob(systemBufferRepository, dispatchers.stream().toList());
     }
 
     @Bean

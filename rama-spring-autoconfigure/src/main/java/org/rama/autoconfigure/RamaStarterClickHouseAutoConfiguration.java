@@ -76,11 +76,12 @@ public class RamaStarterClickHouseAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(name = "systemBufferDrainJobDetail")
-    JobDetail systemBufferDrainJobDetail() {
+    JobDetail systemBufferDrainJobDetail(ClickHouseProperties properties) {
         return JobBuilder.newJob(SystemBufferDrainJob.class)
                 .withIdentity("systemBufferDrain", "system")
                 .storeDurably()
                 .requestRecovery(true)
+                .usingJobData(SystemBufferDrainJob.KEY_BATCH_SIZE, properties.getDrainBatchSize())
                 .build();
     }
 

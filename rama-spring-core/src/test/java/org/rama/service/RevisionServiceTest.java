@@ -13,7 +13,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.entity.JsonConverter;
+import org.rama.entity.UserstampField;
 import org.rama.service.system.SystemBufferService;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
@@ -145,6 +147,26 @@ class RevisionServiceTest {
         // timestampField and userstampField should be excluded
         assertThat(dirty).doesNotContainKey("timestampField");
         assertThat(dirty).doesNotContainKey("userstampField");
+    }
+
+    @Test
+    void saveRevision_extractsUserstampFromRevisionData() throws Exception {
+        // Arrange
+        UserstampField userstamp = new UserstampField();
+        userstamp.setCreatedBy("alice");
+        userstamp.setUpdatedBy("bob");
+        Map<String, Object> revisionData = new HashMap<>();
+        revisionData.put("name", "John");
+        revisionData.put("userstampField", userstamp);
+
+        // Act
+        revisionService.saveRevision("k", "Patient", revisionData, null);
+
+        // Assert
+        verify(systemBufferService).enqueue(eq("revision"), payloadCaptor.capture(), eq("clickhouse:revision"));
+        Map<String, Object> payload = objectMapper.readValue(payloadCaptor.getValue(), new TypeReference<Map<String, Object>>() {});
+        assertThat(payload.get("createdBy")).isEqualTo("alice");
+        assertThat(payload.get("updatedBy")).isEqualTo("bob");
     }
 
     @Test
