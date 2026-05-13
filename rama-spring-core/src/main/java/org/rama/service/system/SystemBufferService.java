@@ -12,12 +12,13 @@ public class SystemBufferService {
     private final SystemBufferRepository repository;
 
     /**
-     * Enqueue a payload for asynchronous dispatch. Must be called from within an
-     * entity transaction (e.g. listener afterCommit synchronization). The INSERT
-     * participates in the calling transaction — if the transaction rolls back, the
-     * buffer row is rolled back too, preventing phantom dispatches.
+     * Enqueue a payload for asynchronous dispatch. Typically called from a listener's
+     * afterCommit synchronization (post-entity-commit), so this method joins the
+     * caller's transaction if one is active, otherwise opens its own. The row is
+     * durable once this method returns; no further coordination with the entity
+     * transaction is needed (it has already committed by the time we get here).
      */
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRED)
     public SystemBuffer enqueue(String bufferType, String payload, String target) {
         SystemBuffer row = new SystemBuffer();
         row.setBufferType(bufferType);
