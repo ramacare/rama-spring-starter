@@ -54,7 +54,7 @@ import org.rama.repository.api.ApiRepository;
 import org.rama.repository.asset.AssetFileRepository;
 import org.rama.repository.master.MasterIdRepository;
 import org.rama.repository.master.MasterItemRepository;
-import org.rama.repository.revision.RevisionRepository;
+import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.repository.system.ClientConfigRepository;
 import org.rama.repository.system.SystemLogRepository;
 import org.rama.repository.system.SystemParameterRepository;
@@ -252,10 +252,12 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(RevisionRepository.class)
+    @ConditionalOnBean(SystemBufferService.class)
     @ConditionalOnProperty(prefix = "rama.revision", name = "enabled", havingValue = "true", matchIfMissing = true)
-    RevisionService revisionService(RevisionRepository revisionRepository) {
-        return new RevisionService(revisionRepository);
+    RevisionService revisionService(SystemBufferService systemBufferService,
+                                    ObjectMapper objectMapper,
+                                    ObjectProvider<RevisionClickHouseRepository> clickHouseRepositoryProvider) {
+        return new RevisionService(systemBufferService, objectMapper, clickHouseRepositoryProvider.getIfAvailable());
     }
 
     @Bean
