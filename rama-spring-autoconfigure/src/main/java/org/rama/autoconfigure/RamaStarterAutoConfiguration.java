@@ -22,6 +22,11 @@ import org.quartz.Scheduler;
 import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
+import org.rama.entity.system.SystemBuffer;
+import org.rama.repository.system.SystemBufferRepository;
+import org.rama.service.system.SystemBufferDispatcher;
+import org.rama.service.system.SystemBufferService;
+import org.rama.job.system.SystemBufferDrainJob;
 import org.rama.ftp.FtpProperties;
 import org.rama.graphql.StarterGraphqlExceptionResolver;
 import org.rama.graphql.directive.AuthDirectiveInstrumentation;
@@ -131,7 +136,7 @@ import java.util.Map;
 @org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
-    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class})
+    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class, SystemBuffer.class})
     @ConditionalOnProperty(prefix = "rama.jpa", name = "enabled", havingValue = "true", matchIfMissing = true)
     static class RamaStarterJpaConfiguration {
     }
@@ -251,6 +256,22 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnProperty(prefix = "rama.revision", name = "enabled", havingValue = "true", matchIfMissing = true)
     RevisionService revisionService(RevisionRepository revisionRepository) {
         return new RevisionService(revisionRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(SystemBufferRepository.class)
+    SystemBufferService systemBufferService(SystemBufferRepository systemBufferRepository) {
+        return new SystemBufferService(systemBufferRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(SystemBufferRepository.class)
+    SystemBufferDrainJob systemBufferDrainJob(
+            SystemBufferRepository systemBufferRepository,
+            ObjectProvider<SystemBufferDispatcher> dispatchers) {
+        return new SystemBufferDrainJob(systemBufferRepository, dispatchers.stream().toList());
     }
 
     @Bean
