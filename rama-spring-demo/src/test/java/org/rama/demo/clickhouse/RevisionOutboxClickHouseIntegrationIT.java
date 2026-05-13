@@ -2,6 +2,7 @@ package org.rama.demo.clickhouse;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.rama.clickhouse.ClickHouseRevisionRecord;
 import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.demo.entity.book.Book;
@@ -15,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.clickhouse.ClickHouseContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -31,7 +33,17 @@ import static org.awaitility.Awaitility.await;
 @Testcontainers
 @SpringBootTest
 @ActiveProfiles("h2")
+@EnabledIf("dockerAvailable")
 class RevisionOutboxClickHouseIntegrationIT {
+
+    @SuppressWarnings("unused") // referenced by @EnabledIf above
+    static boolean dockerAvailable() {
+        try {
+            return DockerClientFactory.instance().isDockerAvailable();
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
 
     @Container
     static ClickHouseContainer clickhouse = new ClickHouseContainer(

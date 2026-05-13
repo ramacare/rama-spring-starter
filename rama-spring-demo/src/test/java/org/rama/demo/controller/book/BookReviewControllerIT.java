@@ -14,9 +14,12 @@ import org.springframework.graphql.test.tester.HttpGraphQlTester;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 @Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -53,15 +56,12 @@ class BookReviewControllerIT {
                 .execute()
                 .path("updateBookReview.rating").entity(Integer.class).isEqualTo(4);
 
-        // Revision rows are written AFTER commit via @Async into system_buffer. Give a brief pause.
-        Thread.sleep(2000);
-
-        // Revisions now go through system_buffer outbox (not JPA revision table).
-        List<SystemBuffer> buffered = systemBufferRepository.findAll().stream()
-                .filter(r -> "revision".equals(r.getBufferType()))
-                .filter(r -> r.getPayload().contains(reviewId))
-                .toList();
-
-        assertThat(buffered).hasSizeGreaterThanOrEqualTo(1);
+        await().atMost(15, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(250)).untilAsserted(() -> {
+            List<SystemBuffer> buffered = systemBufferRepository.findAll().stream()
+                    .filter(r -> "revision".equals(r.getBufferType()))
+                    .filter(r -> r.getPayload().contains("\"" + reviewId + "\""))
+                    .toList();
+            assertThat(buffered).hasSizeGreaterThanOrEqualTo(1);
+        });
     }
 }
