@@ -1,47 +1,24 @@
 package org.rama.entity;
 
-import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.hibernate.annotations.Nationalized;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
 
-@Entity
+/**
+ * POJO carrying one audit revision. No longer a JPA entity — revisions live in
+ * ClickHouse and the outbox is a separate generic table (system_buffer).
+ */
 @Data
 @NoArgsConstructor
-@RequiredArgsConstructor
-public class Revision implements Auditable {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(updatable = false, nullable = false)
-    private Long id;
-
-    @NonNull
+public class Revision {
     private String revisionKey;
-    private String mrn;
     private String revisionEntity;
-
-    @NonNull
+    private String mrn;
     private OffsetDateTime revisionDatetime;
-
-    @NonNull
-    @Convert(converter = JsonConverter.class)
-    @Column(columnDefinition = "json")
-    @Nationalized
     private Map<String, Object> revisionData;
-
-    @Convert(converter = JsonConverter.class)
-    @Column(columnDefinition = "json")
-    @Nationalized
     private Map<String, Object> revisionChange;
-
-    @Embedded
-    private UserstampField userstampField = new UserstampField();
-
-    @Embedded
-    private TimestampField timestampField = new TimestampField();
+    private String createdBy;
+    private String updatedBy;
 }

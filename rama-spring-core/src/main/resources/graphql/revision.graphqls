@@ -5,13 +5,12 @@ extend type Query {
 }
 
 type Revision {
-    id: ID!
     revisionKey: String!
     mrn: String
     revisionEntity: String
     revisionDatetime: DateTime!
     revisionData: JSON!
     revisionChange: JSON
-    userstampField: UserstampField
-    timestampField: TimestampField
+    createdBy: String
+    updatedBy: String
 }
