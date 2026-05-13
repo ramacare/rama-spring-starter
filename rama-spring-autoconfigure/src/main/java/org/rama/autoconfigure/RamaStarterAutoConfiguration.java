@@ -250,7 +250,7 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(SystemBufferService.class)
+    @ConditionalOnBean(SystemBufferRepository.class)
     @ConditionalOnProperty(prefix = "rama.revision", name = "enabled", havingValue = "true", matchIfMissing = true)
     RevisionService revisionService(SystemBufferService systemBufferService,
                                     ObjectMapper objectMapper,
