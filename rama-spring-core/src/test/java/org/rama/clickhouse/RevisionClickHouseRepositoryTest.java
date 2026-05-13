@@ -88,4 +88,30 @@ class RevisionClickHouseRepositoryTest {
         assertThat(sql).contains("FROM revision FINAL");
         assertThat(sql).contains("WHERE revision_key = ?");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void findByMrn_returnsRecordsInRange() {
+        List<ClickHouseRevisionRecord> records = List.of(sampleRecord, sampleRecord);
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+
+        when(jdbcTemplate.query(sqlCaptor.capture(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(records);
+
+        OffsetDateTime from = OffsetDateTime.of(2026, 5, 12, 0, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime to = OffsetDateTime.of(2026, 5, 13, 0, 0, 0, 0, ZoneOffset.UTC);
+
+        RevisionClickHouseRepository repo =
+                new RevisionClickHouseRepository(jdbcTemplate, "revision");
+        List<ClickHouseRevisionRecord> result = repo.findByMrn("MRN-001", from, to);
+
+        assertThat(result).hasSize(2);
+
+        String sql = sqlCaptor.getValue();
+        assertThat(sql).contains("FROM revision FINAL");
+        assertThat(sql).contains("WHERE mrn = ?");
+        assertThat(sql).contains("revision_datetime >= ?");
+        assertThat(sql).contains("revision_datetime <= ?");
+        assertThat(sql).contains("ORDER BY revision_datetime DESC");
+    }
 }
