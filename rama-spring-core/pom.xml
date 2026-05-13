@@ -34,6 +34,13 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.clickhouse</groupId>
+            <artifactId>clickhouse-jdbc</artifactId>
+            <version>0.7.2</version>
+            <classifier>http</classifier>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
             <groupId>io.github.openfeign.querydsl</groupId>
             <artifactId>querydsl-jpa</artifactId>
             <version>7.1</version>

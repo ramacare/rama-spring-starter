@@ -246,18 +246,17 @@ databaseChangeLog:
         - column:
             name: status_code
 - changeSet:
-    id: rama-spring-system-006-revision
-    author: codex
-    validCheckSum: ANY
+    id: rama-spring-system-008-system-buffer
+    author: claude
     preConditions:
     - onFail: MARK_RAN
     - onError: MARK_RAN
     - not:
         tableExists:
-          tableName: revision
+          tableName: system_buffer
     changes:
     - createTable:
-        tableName: revision
+        tableName: system_buffer
         columns:
         - column:
             name: id
@@ -267,82 +266,43 @@ databaseChangeLog:
               primaryKey: true
               nullable: false
         - column:
-            name: revision_key
-            type: VARCHAR(255)
-            constraints:
-              nullable: false
-        - column:
-            name: mrn
+            name: buffer_type
             type: VARCHAR(100)
+            constraints:
+              nullable: false
         - column:
-            name: revision_entity
+            name: payload
+            type: ${clobType}
+            constraints:
+              nullable: false
+        - column:
+            name: target
             type: VARCHAR(255)
         - column:
-            name: revision_datetime
+            name: attempt_count
+            type: INT
+            defaultValueNumeric: 0
+            constraints:
+              nullable: false
+        - column:
+            name: last_error
+            type: VARCHAR(2000)
+        - column:
+            name: last_attempt_at
             type: ${timestampType}
-            constraints:
-              nullable: false
-        - column:
-            name: revision_data
-            type: ${clobType}
-            constraints:
-              nullable: false
-        - column:
-            name: revision_change
-            type: ${clobType}
-        - column:
-            name: created_by
-            type: VARCHAR(200)
-        - column:
-            name: updated_by
-            type: VARCHAR(200)
         - column:
             name: created_at
             type: ${timestampType}
+            constraints:
+              nullable: false
         - column:
-            name: updated_at
-            type: ${timestampType}
+            name: created_by
+            type: VARCHAR(200)
     - createIndex:
-        tableName: revision
-        indexName: ix_revision__revision_key
+        tableName: system_buffer
+        indexName: ix_system_buffer__type_id
         columns:
         - column:
-            name: revision_key
-    - createIndex:
-        tableName: revision
-        indexName: ix_revision__revision_entity_mrn
-        columns:
+            name: buffer_type
         - column:
-            name: revision_entity
-        - column:
-            name: mrn
-- changeSet:
-    id: rama-spring-system-007-revision-datetime-indexes
-    author: claude
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: revision
-    changes:
-    - createIndex:
-        tableName: revision
-        indexName: ix_revision__revision_key_datetime
-        columns:
-        - column:
-            name: revision_key
-        - column:
-            name: revision_datetime
-            descending: true
-    - createIndex:
-        tableName: revision
-        indexName: ix_revision__revision_entity_mrn_datetime
-        columns:
-        - column:
-            name: revision_entity
-        - column:
-            name: mrn
-        - column:
-            name: revision_datetime
-            descending: true
+            name: id
