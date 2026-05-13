@@ -2,12 +2,16 @@ package org.rama.demo.clickhouse;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.quartz.JobDetail;
-import org.quartz.Scheduler;
+import org.mockito.Mockito;
+import org.quartz.JobDataMap;
+import org.quartz.JobExecutionContext;
 import org.rama.clickhouse.ClickHouseRevisionRecord;
 import org.rama.clickhouse.RevisionClickHouseRepository;
 import org.rama.demo.entity.book.Book;
 import org.rama.demo.repository.book.BookRepository;
+import org.rama.job.system.SystemBufferDrainJob;
+import org.rama.repository.system.SystemBufferRepository;
+import org.rama.service.system.SystemBufferDispatcher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -48,19 +52,21 @@ class RevisionOutboxClickHouseIntegrationIT {
     @Autowired BookRepository bookRepository;
     @Autowired TransactionTemplate transactionTemplate;
     @Autowired RevisionClickHouseRepository revisionClickHouseRepository;
-    @Autowired Scheduler quartzScheduler;
+    @Autowired SystemBufferRepository systemBufferRepository;
+    @Autowired List<SystemBufferDispatcher> dispatchers;
 
     @Test
     void saveBook_revisionFlowsThroughOutboxToClickHouse() throws Exception {
         Book book = transactionTemplate.execute(s ->
                 bookRepository.saveAndFlush(new Book("Outbox Test")));
 
-        // Force a drain run rather than waiting for the trigger.
-        JobDetail jobDetail = quartzScheduler
-                .getJobDetail(new org.quartz.JobKey("systemBufferDrain", "system"));
-        if (jobDetail != null) {
-            quartzScheduler.triggerJob(jobDetail.getKey());
-        }
+        // Force a drain run directly instead of scheduling (demo excludes Quartz auto-config).
+        JobExecutionContext mockContext = Mockito.mock(JobExecutionContext.class);
+        JobDataMap jobDataMap = new JobDataMap();
+        Mockito.when(mockContext.getMergedJobDataMap()).thenReturn(jobDataMap);
+
+        SystemBufferDrainJob drainJob = new SystemBufferDrainJob(systemBufferRepository, dispatchers);
+        drainJob.executeInternal(mockContext);
 
         String revisionKey = "org.rama.demo.entity.book.Book^id^" + book.getId();
 

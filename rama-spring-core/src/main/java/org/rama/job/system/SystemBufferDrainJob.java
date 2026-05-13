@@ -44,7 +44,7 @@ public class SystemBufferDrainJob extends QuartzJobBean {
 
     @Override
     @Transactional
-    protected void executeInternal(JobExecutionContext context) {
+    public void executeInternal(JobExecutionContext context) {
         int batchSize = context.getMergedJobDataMap().containsKey(KEY_BATCH_SIZE)
                 ? context.getMergedJobDataMap().getIntValue(KEY_BATCH_SIZE) : DEFAULT_BATCH_SIZE;
 
