@@ -1,0 +1,73 @@
+package org.rama.demo.clickhouse;
+
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.quartz.JobDetail;
+import org.quartz.Scheduler;
+import org.rama.clickhouse.ClickHouseRevisionRecord;
+import org.rama.clickhouse.RevisionClickHouseRepository;
+import org.rama.demo.entity.book.Book;
+import org.rama.demo.repository.book.BookRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.clickhouse.ClickHouseContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+@Tag("integration")
+@Testcontainers
+@SpringBootTest
+@ActiveProfiles("h2")
+class RevisionOutboxClickHouseIntegrationIT {
+
+    @Container
+    static ClickHouseContainer clickhouse = new ClickHouseContainer(
+            DockerImageName.parse("clickhouse/clickhouse-server:24.8"));
+
+    @DynamicPropertySource
+    static void clickHouseProps(DynamicPropertyRegistry registry) {
+        registry.add("rama.revision.clickhouse.enabled", () -> "true");
+        registry.add("rama.revision.clickhouse.url", clickhouse::getJdbcUrl);
+        registry.add("rama.revision.clickhouse.username", clickhouse::getUsername);
+        registry.add("rama.revision.clickhouse.password", clickhouse::getPassword);
+        registry.add("rama.revision.clickhouse.drain-interval", () -> "1s");
+    }
+
+    @Autowired BookRepository bookRepository;
+    @Autowired TransactionTemplate transactionTemplate;
+    @Autowired RevisionClickHouseRepository revisionClickHouseRepository;
+    @Autowired Scheduler quartzScheduler;
+
+    @Test
+    void saveBook_revisionFlowsThroughOutboxToClickHouse() throws Exception {
+        Book book = transactionTemplate.execute(s ->
+                bookRepository.saveAndFlush(new Book("Outbox Test")));
+
+        // Force a drain run rather than waiting for the trigger.
+        JobDetail jobDetail = quartzScheduler
+                .getJobDetail(new org.quartz.JobKey("systemBufferDrain", "system"));
+        if (jobDetail != null) {
+            quartzScheduler.triggerJob(jobDetail.getKey());
+        }
+
+        String revisionKey = "org.rama.demo.entity.book.Book^id^" + book.getId();
+
+        await().atMost(10, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {
+            List<ClickHouseRevisionRecord> history = revisionClickHouseRepository.findHistory(revisionKey);
+            assertThat(history).hasSizeGreaterThanOrEqualTo(1);
+            assertThat(history.get(0).revisionKey()).isEqualTo(revisionKey);
+        });
+    }
+}

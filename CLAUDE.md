@@ -79,6 +79,7 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `rama.mongo.deferred-indexes-enabled` -- MongoDB deferred index creation
 - `rama.meilisearch.enabled` -- Meilisearch sync
 - `rama.meilisearch.initialize-indexes` -- Meilisearch index auto-initialization
+- `rama.revision.clickhouse.enabled` -- Enable ClickHouse audit log via `system_buffer` outbox (default `false`); when on, requires `rama.revision.clickhouse.url`. See `docs/clickhouse-revision.md`.
 - `rama.graphql.enabled` -- GraphQL scalars and directives
 - `rama.liquibase.enabled` -- Starter fallback Liquibase migrations. The starter's `ramaStarterLiquibase` bean is guarded with `@ConditionalOnMissingBean(SpringLiquibase.class)` and only runs when no Spring Boot `liquibase` bean exists. When `spring.liquibase.change-log` is set, Spring Boot's default runs the consumer's master changelog (which must `<include>` `rama-spring-starter-master.yaml` and optionally `rama-spring-quartz.changelog.xml`). Set to `false` to disable the fallback entirely
 - `rama.liquibase.change-log` -- Changelog path for the fallback bean (default: `classpath:/db/changelog/rama-spring-starter-master.yaml`). Only used when the fallback bean is active
