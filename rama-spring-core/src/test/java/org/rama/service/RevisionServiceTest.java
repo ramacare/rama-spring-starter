@@ -11,14 +11,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.rama.entity.Revision;
-import org.rama.repository.revision.RevisionRepository;
+import org.rama.clickhouse.RevisionClickHouseRepository;
+import org.rama.entity.JsonConverter;
+import org.rama.service.system.SystemBufferService;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @Tag("unit")
@@ -26,20 +29,25 @@ import static org.mockito.Mockito.*;
 class RevisionServiceTest {
 
     @Mock
-    private RevisionRepository revisionRepository;
+    private SystemBufferService systemBufferService;
 
+    @Mock
+    private RevisionClickHouseRepository clickHouseRepository;
+
+    private ObjectMapper objectMapper;
     private RevisionService revisionService;
 
     @Captor
-    private ArgumentCaptor<Revision> revisionCaptor;
+    private ArgumentCaptor<String> payloadCaptor;
 
     @BeforeEach
     void setUp() {
-        revisionService = new RevisionService(revisionRepository);
+        objectMapper = JsonConverter.createObjectMapper();
+        revisionService = new RevisionService(systemBufferService, objectMapper, clickHouseRepository);
     }
 
     @Test
-    void saveRevision_shouldPersistWithCorrectFields() {
+    void saveRevision_enqueuesPayload_withCorrectKeys() {
         // Arrange
         String revisionKey = "org.rama.entity.Patient^id^12345";
         String revisionEntity = "Patient";
@@ -48,55 +56,55 @@ class RevisionServiceTest {
         Map<String, Object> revisionChange = new HashMap<>();
         revisionChange.put("name", "Jane");
 
-        when(revisionRepository.save(any(Revision.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
         // Act
         revisionService.saveRevision(revisionKey, revisionEntity, revisionData, revisionChange);
 
         // Assert
-        verify(revisionRepository).save(revisionCaptor.capture());
-        Revision saved = revisionCaptor.getValue();
-        assertThat(saved.getRevisionKey()).isEqualTo(revisionKey);
-        assertThat(saved.getRevisionEntity()).isEqualTo(revisionEntity);
-        assertThat(saved.getRevisionData()).isEqualTo(revisionData);
-        assertThat(saved.getRevisionChange()).isEqualTo(revisionChange);
-        assertThat(saved.getRevisionDatetime()).isNotNull();
+        verify(systemBufferService).enqueue(eq("revision"), payloadCaptor.capture(), eq("clickhouse:revision"));
+        String json = payloadCaptor.getValue();
+        assertThat(json).contains("revisionKey");
+        assertThat(json).contains("revisionEntity");
+        assertThat(json).contains("revisionDatetime");
+        assertThat(json).contains("revisionData");
+        assertThat(json).contains("revisionChange");
+        assertThat(json).contains("12345");
+        assertThat(json).contains("Patient");
     }
 
     @Test
-    void saveRevision_shouldExtractMrnFromRevisionData() {
+    void saveRevision_returnsEarlyForEmptyData() {
+        // Arrange + Act
+        revisionService.saveRevision("key", "Entity", null, null);
+        revisionService.saveRevision("key", "Entity", Map.of(), null);
+
+        // Assert - no enqueue should happen
+        verify(systemBufferService, never()).enqueue(any(), any(), any());
+    }
+
+    @Test
+    void saveRevision_includesMrnFromData() {
         // Arrange
-        String revisionKey = "org.rama.entity.Patient^id^12345";
-        String revisionEntity = "Patient";
         Map<String, Object> revisionData = new HashMap<>();
         revisionData.put("mrn", "MRN-001");
         revisionData.put("name", "John");
 
-        when(revisionRepository.save(any(Revision.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
         // Act
-        revisionService.saveRevision(revisionKey, revisionEntity, revisionData, null);
+        revisionService.saveRevision("key", "Patient", revisionData, null);
 
         // Assert
-        verify(revisionRepository).save(revisionCaptor.capture());
-        Revision saved = revisionCaptor.getValue();
-        assertThat(saved.getMrn()).isEqualTo("MRN-001");
+        verify(systemBufferService).enqueue(eq("revision"), payloadCaptor.capture(), eq("clickhouse:revision"));
+        String json = payloadCaptor.getValue();
+        assertThat(json).contains("MRN-001");
+        assertThat(json).contains("mrn");
     }
 
     @Test
-    void saveRevision_shouldSetMrnToNull_whenRevisionDataHasNoMrn() {
-        // Arrange
-        Map<String, Object> revisionData = new HashMap<>();
-        revisionData.put("name", "John");
+    void getStateAt_returnsEmpty_whenClickHouseRepoNull() {
+        // Arrange - build service with null CH repo
+        RevisionService serviceWithNoRepo = new RevisionService(systemBufferService, objectMapper, null);
 
-        when(revisionRepository.save(any(Revision.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // Act
-        revisionService.saveRevision("key", "Entity", revisionData, null);
-
-        // Assert
-        verify(revisionRepository).save(revisionCaptor.capture());
-        assertThat(revisionCaptor.getValue().getMrn()).isNull();
+        // Act + Assert
+        assertThat(serviceWithNoRepo.getStateAt("key", java.time.OffsetDateTime.now())).isEmpty();
     }
 
     @Test

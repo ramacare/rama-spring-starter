@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.rama.demo.entity.book.Book;
 import org.rama.demo.repository.book.BookRepository;
 import org.rama.demo.repository.book.BookReviewRepository;
-import org.rama.entity.Revision;
-import org.rama.repository.revision.RevisionRepository;
+import org.rama.entity.system.SystemBuffer;
+import org.rama.repository.system.SystemBufferRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.graphql.test.autoconfigure.tester.AutoConfigureHttpGraphQlTester;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,7 +27,7 @@ class BookReviewControllerIT {
     @Autowired HttpGraphQlTester graphQlTester;
     @Autowired BookRepository bookRepository;
     @Autowired BookReviewRepository bookReviewRepository;
-    @Autowired RevisionRepository revisionRepository;
+    @Autowired SystemBufferRepository systemBufferRepository;
     @Autowired TransactionTemplate transactionTemplate;
 
     @Test
@@ -53,13 +53,15 @@ class BookReviewControllerIT {
                 .execute()
                 .path("updateBookReview.rating").entity(Integer.class).isEqualTo(4);
 
-        // Revision rows are written AFTER commit via @Async. Give a brief pause.
+        // Revision rows are written AFTER commit via @Async into system_buffer. Give a brief pause.
         Thread.sleep(2000);
 
-        String revisionKey = "org.rama.demo.entity.book.BookReview^id^" + reviewId;
-        List<Revision> revisions =
-                revisionRepository.findAllByRevisionKeyOrderByRevisionDatetimeDesc(revisionKey);
+        // Revisions now go through system_buffer outbox (not JPA revision table).
+        List<SystemBuffer> buffered = systemBufferRepository.findAll().stream()
+                .filter(r -> "revision".equals(r.getBufferType()))
+                .filter(r -> r.getPayload().contains(reviewId))
+                .toList();
 
-        assertThat(revisions).hasSizeGreaterThanOrEqualTo(1);
+        assertThat(buffered).hasSizeGreaterThanOrEqualTo(1);
     }
 }
