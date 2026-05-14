@@ -18,10 +18,23 @@ import org.hibernate.event.spi.EventType;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.jpa.boot.spi.IntegratorProvider;
 import org.hibernate.service.spi.SessionFactoryServiceRegistry;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
 import org.quartz.Scheduler;
+import org.quartz.SimpleScheduleBuilder;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
+import org.rama.aspect.IdempotencyAspect;
 import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
+import org.rama.entity.system.RequestDedup;
+import org.rama.job.system.RequestDedupCleanupJob;
+import org.rama.repository.system.RequestDedupRepository;
+import org.rama.service.idempotency.IdempotencyProperties;
+import org.rama.service.idempotency.IdempotencyService;
+import org.rama.service.idempotency.ResponseCodec;
+import org.rama.service.idempotency.SignatureResolver;
 import org.rama.ftp.FtpProperties;
 import org.rama.graphql.StarterGraphqlExceptionResolver;
 import org.rama.graphql.directive.AuthDirectiveInstrumentation;
@@ -112,6 +125,7 @@ import tools.jackson.databind.cfg.CoercionInputShape;
 import tools.jackson.databind.json.JsonMapper;
 
 import javax.sql.DataSource;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -126,12 +140,12 @@ import java.util.Map;
         // spring.liquibase.change-log. See starter#13.
         "org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration"
 })
-@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class})
+@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class, IdempotencyProperties.class})
 @PropertySource(value = "classpath:rama-quartz-defaults.properties", ignoreResourceNotFound = true)
 @org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
-    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class})
+    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class, RequestDedup.class})
     @ConditionalOnProperty(prefix = "rama.jpa", name = "enabled", havingValue = "true", matchIfMissing = true)
     static class RamaStarterJpaConfiguration {
     }
@@ -290,6 +304,80 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(QuartzService.class)
     SchedulerController schedulerController(QuartzService quartzService, org.springframework.core.env.Environment environment, List<Scheduler> schedulers) {
         return new SchedulerController(quartzService, environment, schedulers);
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(prefix = "rama.idempotency", name = "enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(RequestDedupRepository.class)
+    static class RamaStarterIdempotencyConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(name = "idempotencyClock")
+        Clock idempotencyClock() {
+            return Clock.systemUTC();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        SignatureResolver signatureResolver(EnvironmentService environmentService,
+                                            IdempotencyProperties properties,
+                                            @org.springframework.beans.factory.annotation.Qualifier("idempotencyClock") Clock clock) {
+            return new SignatureResolver(environmentService, properties, clock);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        ResponseCodec responseCodec() {
+            return new ResponseCodec();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        IdempotencyService idempotencyService(RequestDedupRepository repository,
+                                              EntityManager entityManager,
+                                              ResponseCodec responseCodec) {
+            return new IdempotencyService(repository, entityManager, responseCodec);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        IdempotencyAspect idempotencyAspect(IdempotencyService idempotencyService,
+                                            SignatureResolver signatureResolver,
+                                            EnvironmentService environmentService,
+                                            IdempotencyProperties properties,
+                                            @org.springframework.beans.factory.annotation.Qualifier("idempotencyClock") Clock clock) {
+            return new IdempotencyAspect(idempotencyService, signatureResolver, environmentService, properties, clock);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        RequestDedupCleanupJob requestDedupCleanupJob(RequestDedupRepository repository) {
+            return new RequestDedupCleanupJob(repository);
+        }
+
+        @Bean
+        @ConditionalOnBean(Scheduler.class)
+        @ConditionalOnMissingBean(name = "requestDedupCleanupJobDetail")
+        JobDetail requestDedupCleanupJobDetail() {
+            return JobBuilder.newJob(RequestDedupCleanupJob.class)
+                    .withIdentity("request-dedup-cleanup", "rama-idempotency")
+                    .storeDurably()
+                    .build();
+        }
+
+        @Bean
+        @ConditionalOnBean(Scheduler.class)
+        @ConditionalOnMissingBean(name = "requestDedupCleanupTrigger")
+        Trigger requestDedupCleanupTrigger(JobDetail requestDedupCleanupJobDetail, IdempotencyProperties properties) {
+            long intervalMs = Math.max(1_000L, properties.getCleanupInterval().toMillis());
+            return TriggerBuilder.newTrigger()
+                    .forJob(requestDedupCleanupJobDetail)
+                    .withIdentity("request-dedup-cleanup-trigger", "rama-idempotency")
+                    .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+                            .withIntervalInMilliseconds(intervalMs)
+                            .repeatForever())
+                    .build();
+        }
     }
 
     @Bean
