@@ -1,0 +1,79 @@
+---
+databaseChangeLog:
+- property:
+    name: clobType
+    value: clob
+- property:
+    name: clobType
+    value: "nvarchar(max)"
+    dbms: mssql
+- property:
+    name: clobType
+    value: longtext
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: timestamp
+- property:
+    name: timestampType
+    value: "datetime2(3)"
+    dbms: mssql
+- property:
+    name: timestampType
+    value: "datetime(3)"
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: "timestamp(3)"
+    dbms: postgresql
+- changeSet:
+    id: rama-spring-idempotency-001-request-dedup
+    author: claude
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: request_dedup
+    changes:
+    - createTable:
+        tableName: request_dedup
+        columns:
+        - column:
+            name: id
+            type: VARCHAR(64)
+            constraints:
+              primaryKey: true
+              primaryKeyName: request_dedup_pkey
+              nullable: false
+        - column:
+            name: method
+            type: VARCHAR(255)
+        - column:
+            name: username
+            type: VARCHAR(255)
+        - column:
+            name: status
+            type: VARCHAR(20)
+            constraints:
+              nullable: false
+        - column:
+            name: response_json
+            type: ${clobType}
+        - column:
+            name: created_at
+            type: ${timestampType}
+            constraints:
+              nullable: false
+        - column:
+            name: expires_at
+            type: ${timestampType}
+            constraints:
+              nullable: false
+    - createIndex:
+        tableName: request_dedup
+        indexName: ix_request_dedup__expires_at
+        columns:
+        - column:
+            name: expires_at
