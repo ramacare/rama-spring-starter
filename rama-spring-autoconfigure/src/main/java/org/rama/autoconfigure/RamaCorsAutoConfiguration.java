@@ -20,9 +20,12 @@ import java.util.List;
  * `ramaservice/.../config/CORSFilter.java` and
  * `his-service/.../config/CORSFilter.java`.
  *
- * <p>Default {@code rama.cors.enabled=false}: consumers explicitly opt in. The
- * filter is registered at {@link Ordered#HIGHEST_PRECEDENCE} so the CORS headers
- * (and the {@code OPTIONS} short-circuit) win over any auth filters.</p>
+ * <p>Default {@code rama.cors.enabled=true} — both source consumers already
+ * ran with this filter active so the bundled version preserves their behaviour
+ * on upgrade. Set {@code rama.cors.enabled=false} for apps using Spring's
+ * idiomatic {@code CorsConfigurationSource} handling. The filter is registered
+ * at {@link Ordered#HIGHEST_PRECEDENCE} so the CORS headers (and the
+ * {@code OPTIONS} short-circuit) win over any auth filters.</p>
  *
  * <p>The idempotency header from {@link IdempotencyProperties} (default
  * {@code Idempotency-Key}) is auto-appended to {@code allowedHeaders} unless the
@@ -30,7 +33,7 @@ import java.util.List;
  * {@code rama.idempotency} in sync without making the consumer maintain both.</p>
  */
 @AutoConfiguration
-@ConditionalOnProperty(prefix = "rama.cors", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "rama.cors", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties({RamaCorsProperties.class, IdempotencyProperties.class})
 public class RamaCorsAutoConfiguration {
 
