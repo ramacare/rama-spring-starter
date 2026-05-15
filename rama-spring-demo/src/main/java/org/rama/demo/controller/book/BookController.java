@@ -1,6 +1,7 @@
 package org.rama.demo.controller.book;
 
 import lombok.RequiredArgsConstructor;
+import org.rama.annotation.IdempotentMutation;
 import org.rama.demo.entity.book.Book;
 import org.rama.demo.repository.book.BookRepository;
 import org.rama.entity.StatusCode;
@@ -33,6 +34,7 @@ public class BookController {
     }
 
     @MutationMapping
+    @IdempotentMutation(ttl = "30s")
     public Optional<Book> createBook(@Argument Map<String, Object> input) {
         String id = Objects.toString(input.get("id"), null);
         return genericEntityService.createEntity(Book.class, bookRepository, id, input);
