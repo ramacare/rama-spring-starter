@@ -12,15 +12,19 @@ import java.util.List;
  *
  * <p>Defaults mirror the de-facto values both `ramaservice` and `his-service`
  * carried in their local copies before this filter moved into the starter
- * (issue #26). Default {@link #enabled} is {@code false} so consumers must
- * explicitly opt in — the strict-secure default keeps existing apps and apps
- * using Spring's idiomatic {@code CorsConfigurationSource} unaffected.</p>
+ * (issue #26), including a default-on {@link #enabled} flag: those consumers
+ * already ran with this exact filter active, and bundling without flipping the
+ * default would require every consumer to add a property during migration.
+ * Set {@code rama.cors.enabled=false} to disable — required for apps using
+ * Spring's idiomatic {@code CorsConfigurationSource}-based CORS handling, since
+ * the bundled filter sets the response headers at HIGHEST_PRECEDENCE and would
+ * override anything Spring computes later in the chain.</p>
  */
 @Data
 @ConfigurationProperties(prefix = "rama.cors")
 public class RamaCorsProperties {
 
-    private boolean enabled = false;
+    private boolean enabled = true;
 
     private String allowedOrigins = "*";
 
