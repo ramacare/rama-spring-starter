@@ -335,8 +335,9 @@ public class RamaStarterAutoConfiguration {
         @ConditionalOnMissingBean
         IdempotencyService idempotencyService(RequestDedupRepository repository,
                                               EntityManager entityManager,
-                                              ResponseCodec responseCodec) {
-            return new IdempotencyService(repository, entityManager, responseCodec);
+                                              ResponseCodec responseCodec,
+                                              org.springframework.transaction.PlatformTransactionManager transactionManager) {
+            return new IdempotencyService(repository, entityManager, responseCodec, transactionManager);
         }
 
         @Bean
