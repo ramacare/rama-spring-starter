@@ -28,9 +28,9 @@ import org.rama.aspect.IdempotencyAspect;
 import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
-import org.rama.entity.system.RequestDedup;
-import org.rama.job.system.RequestDedupCleanupJob;
-import org.rama.repository.system.RequestDedupRepository;
+import org.rama.entity.system.SystemRequestDedup;
+import org.rama.job.system.SystemRequestDedupCleanupJob;
+import org.rama.repository.system.SystemRequestDedupRepository;
 import org.rama.service.idempotency.IdempotencyProperties;
 import org.rama.service.idempotency.IdempotencyService;
 import org.rama.service.idempotency.ResponseCodec;
@@ -145,7 +145,7 @@ import java.util.Map;
 @org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
-    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class, RequestDedup.class})
+    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class, SystemRequestDedup.class})
     @ConditionalOnProperty(prefix = "rama.jpa", name = "enabled", havingValue = "true", matchIfMissing = true)
     static class RamaStarterJpaConfiguration {
     }
@@ -308,7 +308,7 @@ public class RamaStarterAutoConfiguration {
 
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "rama.idempotency", name = "enabled", havingValue = "true", matchIfMissing = true)
-    @ConditionalOnBean(RequestDedupRepository.class)
+    @ConditionalOnBean(SystemRequestDedupRepository.class)
     static class RamaStarterIdempotencyConfiguration {
 
         @Bean
@@ -333,7 +333,7 @@ public class RamaStarterAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        IdempotencyService idempotencyService(RequestDedupRepository repository,
+        IdempotencyService idempotencyService(SystemRequestDedupRepository repository,
                                               EntityManager entityManager,
                                               ResponseCodec responseCodec,
                                               org.springframework.transaction.PlatformTransactionManager transactionManager) {
@@ -352,28 +352,28 @@ public class RamaStarterAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        RequestDedupCleanupJob requestDedupCleanupJob(RequestDedupRepository repository) {
-            return new RequestDedupCleanupJob(repository);
+        SystemRequestDedupCleanupJob systemRequestDedupCleanupJob(SystemRequestDedupRepository repository) {
+            return new SystemRequestDedupCleanupJob(repository);
         }
 
         @Bean
         @ConditionalOnBean(Scheduler.class)
-        @ConditionalOnMissingBean(name = "requestDedupCleanupJobDetail")
-        JobDetail requestDedupCleanupJobDetail() {
-            return JobBuilder.newJob(RequestDedupCleanupJob.class)
-                    .withIdentity("request-dedup-cleanup", "rama-idempotency")
+        @ConditionalOnMissingBean(name = "systemRequestDedupCleanupJobDetail")
+        JobDetail systemRequestDedupCleanupJobDetail() {
+            return JobBuilder.newJob(SystemRequestDedupCleanupJob.class)
+                    .withIdentity("system-request-dedup-cleanup", "rama-idempotency")
                     .storeDurably()
                     .build();
         }
 
         @Bean
         @ConditionalOnBean(Scheduler.class)
-        @ConditionalOnMissingBean(name = "requestDedupCleanupTrigger")
-        Trigger requestDedupCleanupTrigger(JobDetail requestDedupCleanupJobDetail, IdempotencyProperties properties) {
+        @ConditionalOnMissingBean(name = "systemRequestDedupCleanupTrigger")
+        Trigger systemRequestDedupCleanupTrigger(JobDetail systemRequestDedupCleanupJobDetail, IdempotencyProperties properties) {
             long intervalMs = Math.max(1_000L, properties.getCleanupInterval().toMillis());
             return TriggerBuilder.newTrigger()
-                    .forJob(requestDedupCleanupJobDetail)
-                    .withIdentity("request-dedup-cleanup-trigger", "rama-idempotency")
+                    .forJob(systemRequestDedupCleanupJobDetail)
+                    .withIdentity("system-request-dedup-cleanup-trigger", "rama-idempotency")
                     .withSchedule(SimpleScheduleBuilder.simpleSchedule()
                             .withIntervalInMilliseconds(intervalMs)
                             .repeatForever())

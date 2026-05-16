@@ -3,9 +3,9 @@ package org.rama.service.idempotency;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import lombok.extern.slf4j.Slf4j;
-import org.rama.entity.system.RequestDedup;
-import org.rama.entity.system.RequestDedup.Status;
-import org.rama.repository.system.RequestDedupRepository;
+import org.rama.entity.system.SystemRequestDedup;
+import org.rama.entity.system.SystemRequestDedup.Status;
+import org.rama.repository.system.SystemRequestDedupRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -17,13 +17,13 @@ import java.time.OffsetDateTime;
 @Slf4j
 public class IdempotencyService {
 
-    private final RequestDedupRepository repository;
+    private final SystemRequestDedupRepository repository;
     private final EntityManager entityManager;
     private final ResponseCodec responseCodec;
     private final TransactionTemplate claimTransactionTemplate;
     private final TransactionTemplate lockTransactionTemplate;
 
-    public IdempotencyService(RequestDedupRepository repository,
+    public IdempotencyService(SystemRequestDedupRepository repository,
                               EntityManager entityManager,
                               ResponseCodec responseCodec,
                               PlatformTransactionManager transactionManager) {
@@ -54,7 +54,7 @@ public class IdempotencyService {
     public boolean tryClaim(String signature, String method, String username,
                             OffsetDateTime now, OffsetDateTime expiresAt) {
         Boolean result = claimTransactionTemplate.execute(status -> {
-            RequestDedup row = new RequestDedup();
+            SystemRequestDedup row = new SystemRequestDedup();
             row.setId(signature);
             row.setMethod(truncate(method, 255));
             row.setUsername(truncate(username, 255));
@@ -95,7 +95,7 @@ public class IdempotencyService {
         Throwable[] thrown = new Throwable[1];
         try {
             return lockTransactionTemplate.execute(status -> {
-                RequestDedup row = repository.findBySignatureForUpdate(signature)
+                SystemRequestDedup row = repository.findBySignatureForUpdate(signature)
                         .orElseThrow(() -> new IllegalStateException("Dedup row vanished after claim: " + signature));
 
                 if (row.getStatus() == Status.COMPLETED && row.getExpiresAt().isAfter(now)) {

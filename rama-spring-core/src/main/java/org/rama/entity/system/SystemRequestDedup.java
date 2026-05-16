@@ -14,12 +14,12 @@ import lombok.NoArgsConstructor;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "request_dedup", indexes = {
-        @Index(name = "ix_request_dedup__expires_at", columnList = "expires_at")
+@Table(name = "system_request_dedup", indexes = {
+        @Index(name = "ix_system_request_dedup__expires_at", columnList = "expires_at")
 })
 @Data
 @NoArgsConstructor
-public class RequestDedup {
+public class SystemRequestDedup {
 
     public enum Status { PENDING, COMPLETED }
 

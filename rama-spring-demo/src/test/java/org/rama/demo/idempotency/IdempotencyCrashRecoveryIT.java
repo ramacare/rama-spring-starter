@@ -5,9 +5,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.rama.annotation.IdempotentMutation;
-import org.rama.entity.system.RequestDedup;
-import org.rama.entity.system.RequestDedup.Status;
-import org.rama.repository.system.RequestDedupRepository;
+import org.rama.entity.system.SystemRequestDedup;
+import org.rama.entity.system.SystemRequestDedup.Status;
+import org.rama.repository.system.SystemRequestDedupRepository;
 import org.rama.service.environment.EnvironmentService;
 import org.rama.service.idempotency.SignatureResolver;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IdempotencyCrashRecoveryIT {
 
     @Autowired TestMutation mutation;
-    @Autowired RequestDedupRepository repository;
+    @Autowired SystemRequestDedupRepository repository;
     @Autowired SignatureResolver signatureResolver;
     @Autowired EnvironmentService environmentService;
     @Autowired TransactionTemplate tx;
@@ -66,7 +66,7 @@ class IdempotencyCrashRecoveryIT {
         String signature = signatureResolver.resolve(args);
 
         OffsetDateTime now = OffsetDateTime.parse("2026-05-15T00:00:00Z");
-        RequestDedup stranded = new RequestDedup();
+        SystemRequestDedup stranded = new SystemRequestDedup();
         stranded.setId(signature);
         stranded.setMethod("crashed-mutation");
         stranded.setUsername(environmentService.getCurrentUsername());
@@ -86,7 +86,7 @@ class IdempotencyCrashRecoveryIT {
                 .isEqualTo(1);
         assertThat(result).isEqualTo("paid-123-#1");
 
-        RequestDedup after = repository.findById(signature).orElseThrow();
+        SystemRequestDedup after = repository.findById(signature).orElseThrow();
         assertThat(after.getStatus()).isEqualTo(Status.COMPLETED);
         assertThat(after.getResponseJson()).isEqualTo("\"paid-123-#1\"");
     }

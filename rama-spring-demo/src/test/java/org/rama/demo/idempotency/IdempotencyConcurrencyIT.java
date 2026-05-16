@@ -5,7 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.rama.annotation.IdempotentMutation;
-import org.rama.repository.system.RequestDedupRepository;
+import org.rama.repository.system.SystemRequestDedupRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IdempotencyConcurrencyIT {
 
     @Autowired TestMutation mutation;
-    @Autowired RequestDedupRepository repository;
+    @Autowired SystemRequestDedupRepository repository;
     @Autowired TransactionTemplate tx;
 
     @BeforeEach

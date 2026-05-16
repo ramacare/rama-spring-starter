@@ -9,9 +9,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.rama.entity.system.RequestDedup;
-import org.rama.entity.system.RequestDedup.Status;
-import org.rama.repository.system.RequestDedupRepository;
+import org.rama.entity.system.SystemRequestDedup;
+import org.rama.entity.system.SystemRequestDedup.Status;
+import org.rama.repository.system.SystemRequestDedupRepository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
@@ -30,7 +30,7 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class IdempotencyServiceTest {
 
-    @Mock RequestDedupRepository repository;
+    @Mock SystemRequestDedupRepository repository;
     @Mock EntityManager entityManager;
     @Mock PlatformTransactionManager transactionManager;
     ResponseCodec responseCodec = new ResponseCodec();
@@ -50,7 +50,7 @@ class IdempotencyServiceTest {
         boolean claimed = service.tryClaim("sig-1", "method-x", "alice", now, now.plusSeconds(30));
 
         assertThat(claimed).isTrue();
-        verify(entityManager).persist(any(RequestDedup.class));
+        verify(entityManager).persist(any(SystemRequestDedup.class));
         verify(entityManager).flush();
     }
 
@@ -69,7 +69,7 @@ class IdempotencyServiceTest {
     void lockAndExecute_returnsCachedResponse_whenCompletedAndFresh() throws Throwable {
         OffsetDateTime now = OffsetDateTime.parse("2026-05-15T00:00:00Z");
 
-        RequestDedup row = new RequestDedup();
+        SystemRequestDedup row = new SystemRequestDedup();
         row.setId("sig-cached");
         row.setStatus(Status.COMPLETED);
         row.setExpiresAt(now.plusSeconds(30));
@@ -92,7 +92,7 @@ class IdempotencyServiceTest {
     void lockAndExecute_runsWorkAndPersistsResponse_whenPending() throws Throwable {
         OffsetDateTime now = OffsetDateTime.parse("2026-05-15T00:00:00Z");
 
-        RequestDedup row = new RequestDedup();
+        SystemRequestDedup row = new SystemRequestDedup();
         row.setId("sig-pending");
         row.setStatus(Status.PENDING);
         row.setExpiresAt(now.plusSeconds(30));
@@ -105,9 +105,9 @@ class IdempotencyServiceTest {
 
         assertThat(result).isEqualTo("newly-computed");
 
-        ArgumentCaptor<RequestDedup> captor = ArgumentCaptor.forClass(RequestDedup.class);
+        ArgumentCaptor<SystemRequestDedup> captor = ArgumentCaptor.forClass(SystemRequestDedup.class);
         verify(repository).save(captor.capture());
-        RequestDedup saved = captor.getValue();
+        SystemRequestDedup saved = captor.getValue();
         assertThat(saved.getStatus()).isEqualTo(Status.COMPLETED);
         assertThat(saved.getResponseJson()).isEqualTo("\"newly-computed\"");
     }
@@ -116,7 +116,7 @@ class IdempotencyServiceTest {
     void lockAndExecute_runsWorkAndPersistsResponse_whenCompletedButExpired() throws Throwable {
         OffsetDateTime now = OffsetDateTime.parse("2026-05-15T00:00:00Z");
 
-        RequestDedup row = new RequestDedup();
+        SystemRequestDedup row = new SystemRequestDedup();
         row.setId("sig-expired");
         row.setStatus(Status.COMPLETED);
         row.setExpiresAt(now.minusSeconds(10));
@@ -128,7 +128,7 @@ class IdempotencyServiceTest {
                 () -> "fresh");
 
         assertThat(result).isEqualTo("fresh");
-        ArgumentCaptor<RequestDedup> captor = ArgumentCaptor.forClass(RequestDedup.class);
+        ArgumentCaptor<SystemRequestDedup> captor = ArgumentCaptor.forClass(SystemRequestDedup.class);
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getResponseJson()).isEqualTo("\"fresh\"");
     }
@@ -146,7 +146,7 @@ class IdempotencyServiceTest {
     void lockAndExecute_propagatesWorkExceptionsForRollback() {
         OffsetDateTime now = OffsetDateTime.parse("2026-05-15T00:00:00Z");
 
-        RequestDedup row = new RequestDedup();
+        SystemRequestDedup row = new SystemRequestDedup();
         row.setId("sig-fail");
         row.setStatus(Status.PENDING);
         row.setExpiresAt(now.plusSeconds(30));

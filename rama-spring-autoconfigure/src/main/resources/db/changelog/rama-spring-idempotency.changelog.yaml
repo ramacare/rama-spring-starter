@@ -27,7 +27,7 @@ databaseChangeLog:
     value: "timestamp(3)"
     dbms: postgresql
 - changeSet:
-    id: rama-spring-idempotency-001-request-dedup
+    id: rama-spring-idempotency-001-system-request-dedup
     author: claude
     validCheckSum: ANY
     preConditions:
@@ -35,17 +35,17 @@ databaseChangeLog:
     - onError: MARK_RAN
     - not:
         tableExists:
-          tableName: request_dedup
+          tableName: system_request_dedup
     changes:
     - createTable:
-        tableName: request_dedup
+        tableName: system_request_dedup
         columns:
         - column:
             name: id
             type: VARCHAR(64)
             constraints:
               primaryKey: true
-              primaryKeyName: request_dedup_pkey
+              primaryKeyName: system_request_dedup_pkey
               nullable: false
         - column:
             name: method
@@ -72,8 +72,8 @@ databaseChangeLog:
             constraints:
               nullable: false
     - createIndex:
-        tableName: request_dedup
-        indexName: ix_request_dedup__expires_at
+        tableName: system_request_dedup
+        indexName: ix_system_request_dedup__expires_at
         columns:
         - column:
             name: expires_at

@@ -4,10 +4,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.quartz.JobDataMap;
-import org.rama.entity.system.RequestDedup;
-import org.rama.entity.system.RequestDedup.Status;
-import org.rama.job.system.RequestDedupCleanupJob;
-import org.rama.repository.system.RequestDedupRepository;
+import org.rama.entity.system.SystemRequestDedup;
+import org.rama.entity.system.SystemRequestDedup.Status;
+import org.rama.job.system.SystemRequestDedupCleanupJob;
+import org.rama.repository.system.SystemRequestDedupRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("h2")
 class IdempotencyCleanupJobIT {
 
-    @Autowired RequestDedupCleanupJob job;
-    @Autowired RequestDedupRepository repository;
+    @Autowired SystemRequestDedupCleanupJob job;
+    @Autowired SystemRequestDedupRepository repository;
     @Autowired TransactionTemplate tx;
 
     @BeforeEach
@@ -63,8 +63,8 @@ class IdempotencyCleanupJobIT {
         assertThat(repository.count()).isZero();
     }
 
-    private static RequestDedup row(String id, OffsetDateTime expiresAt) {
-        RequestDedup r = new RequestDedup();
+    private static SystemRequestDedup row(String id, OffsetDateTime expiresAt) {
+        SystemRequestDedup r = new SystemRequestDedup();
         r.setId(id);
         r.setMethod("test-method");
         r.setUsername("test-user");

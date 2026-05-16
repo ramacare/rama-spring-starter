@@ -26,7 +26,7 @@ public class SignatureResolver {
      * Header path: SHA-256("h:" + Idempotency-Key + "|" + username)
      * Fallback:    SHA-256("t:" + floor(now,1s) + "|" + username + "|" + canonicalJson(args))
      *
-     * Output is always 64 hex chars — fits the {@code request_dedup.id varchar(64)} column.
+     * Output is always 64 hex chars — fits the {@code system_request_dedup.id varchar(64)} column.
      */
     public String resolve(Object[] args) {
         String username = nullSafe(environmentService.getCurrentUsername());
