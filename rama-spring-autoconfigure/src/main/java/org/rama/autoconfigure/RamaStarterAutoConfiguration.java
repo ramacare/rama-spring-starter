@@ -713,6 +713,27 @@ public class RamaStarterAutoConfiguration {
         return builder -> builder.instrumentation(List.of(new AuthDirectiveInstrumentation()));
     }
 
+    /**
+     * Legacy scalar coercion shim (issue #27). graphql-java 22 tightened
+     * built-in scalar coercion ({@code Integer} → {@code String} etc.) — clients
+     * written against the pre-Spring-Boot-4 stack relied on the lenient
+     * fallbacks. The shim restores that behaviour via graphql-java's official
+     * {@code LegacyCoercingInputInterceptor.migratesValues()} migration hook.
+     * Default <strong>on</strong> — both source consumers (`ramaservice`,
+     * `his-service`) already enabled this via a hand-rolled
+     * {@code GraphQlStringCoercionConfig}; flipping the default to true on
+     * bundling preserves their behaviour without requiring a property line
+     * during migration. Set {@code rama.graphql.legacy-coercion.enabled=false}
+     * to opt back into graphql-java's strict default for new spec-clean clients.
+     */
+    @Bean
+    @ConditionalOnClass(GraphQlSourceBuilderCustomizer.class)
+    @ConditionalOnMissingBean(name = "ramaStarterLegacyCoercionCustomizer")
+    @ConditionalOnProperty(prefix = "rama.graphql.legacy-coercion", name = "enabled", havingValue = "true", matchIfMissing = true)
+    GraphQlSourceBuilderCustomizer ramaStarterLegacyCoercionCustomizer() {
+        return builder -> builder.instrumentation(List.of(new org.rama.graphql.LegacyScalarCoercionInstrumentation()));
+    }
+
     @Bean
     @ConditionalOnMissingBean(name = "ramaStarterHibernatePropertiesCustomizer")
     HibernatePropertiesCustomizer ramaStarterHibernatePropertiesCustomizer(
