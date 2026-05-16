@@ -1,5 +1,6 @@
 package org.rama.autoconfigure;
 
+import org.rama.cors.IdempotencyHeaderSupport;
 import org.rama.cors.RamaCorsFilter;
 import org.rama.cors.RamaCorsProperties;
 import org.rama.service.idempotency.IdempotencyProperties;
@@ -56,25 +57,10 @@ public class RamaCorsAutoConfiguration {
             RamaCorsProperties corsProperties,
             ObjectProvider<IdempotencyProperties> idempotencyPropertiesProvider) {
         List<String> headers = new ArrayList<>(corsProperties.getAllowedHeaders());
-        String idempotencyHeader = resolveIdempotencyHeader(idempotencyPropertiesProvider);
-        if (idempotencyHeader != null && !containsIgnoreCase(headers, idempotencyHeader)) {
+        String idempotencyHeader = IdempotencyHeaderSupport.resolveHeaderName(idempotencyPropertiesProvider);
+        if (!IdempotencyHeaderSupport.containsIgnoreCase(headers, idempotencyHeader)) {
             headers.add(idempotencyHeader);
         }
         return String.join(", ", headers);
-    }
-
-    private static String resolveIdempotencyHeader(ObjectProvider<IdempotencyProperties> provider) {
-        IdempotencyProperties properties = provider.getIfAvailable();
-        if (properties == null) return "Idempotency-Key";
-        String configured = properties.getHeaderName();
-        if (configured == null || configured.isBlank()) return "Idempotency-Key";
-        return configured;
-    }
-
-    private static boolean containsIgnoreCase(List<String> list, String value) {
-        for (String entry : list) {
-            if (entry != null && entry.equalsIgnoreCase(value)) return true;
-        }
-        return false;
     }
 }
