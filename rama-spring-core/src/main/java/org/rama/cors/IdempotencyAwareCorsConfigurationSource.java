@@ -71,7 +71,7 @@ public class IdempotencyAwareCorsConfigurationSource implements CorsConfiguratio
         if (allowed.contains(WILDCARD)) {
             return original;
         }
-        if (containsIgnoreCase(allowed, headerName)) {
+        if (IdempotencyHeaderSupport.containsIgnoreCase(allowed, headerName)) {
             return original;
         }
         // Spring's CorsConfiguration copy constructor shares the underlying
@@ -84,12 +84,5 @@ public class IdempotencyAwareCorsConfigurationSource implements CorsConfiguratio
         copiedHeaders.add(headerName);
         copy.setAllowedHeaders(copiedHeaders);
         return copy;
-    }
-
-    private static boolean containsIgnoreCase(List<String> list, String value) {
-        for (String entry : list) {
-            if (entry != null && entry.equalsIgnoreCase(value)) return true;
-        }
-        return false;
     }
 }
