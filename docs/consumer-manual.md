@@ -91,8 +91,28 @@ rama:
     initialize-indexes: true         # Create indexes on startup
   graphql:
     enabled: true                    # Enable GraphQL validation/scalar wiring
+    legacy-coercion:
+      enabled: true                  # Restore pre-graphql-java-22 lenient scalar coercion
   liquibase:
     enabled: true                    # Run starter Liquibase migrations
+  cors:
+    enabled: true                    # Register bundled blanket CORS filter (HIGHEST_PRECEDENCE)
+    allowed-origins: "*"
+    allowed-methods: "POST, GET, OPTIONS, PUT, DELETE"
+    allowed-headers:                 # Idempotency-Key is auto-merged from rama.idempotency.header-name
+      - Accept
+      - Content-Type
+      - Origin
+      - X-Requested-With
+      - Last-Modified
+      - Authorization
+      - Referrer-Policy
+  idempotency:
+    enabled: true                    # @IdempotentMutation aspect (see Quartz + JPA section)
+    header-name: Idempotency-Key
+    default-ttl: 30s
+    cors:
+      augment: true                  # Inject header-name into any CorsConfigurationSource bean
 ```
 
 ## 3. Entity Pattern
@@ -427,3 +447,41 @@ String content = ftpService.readText("lab", "/inbound/result.hl7");
 ### Missing dependency warning
 
 If `rama.ftp.enabled=true` but `commons-net` is not on the classpath, the starter logs a warning at startup with the required dependency snippet. FTP beans will **not** be created.
+
+## 9. CORS
+
+The starter ships two complementary CORS facilities; pick the one that matches your existing CORS strategy.
+
+### Blanket CORS filter — `rama.cors.enabled` (default **true**)
+
+Servlet `Filter` registered at `HIGHEST_PRECEDENCE` that sets the `Access-Control-Allow-*` headers from `rama.cors.*` properties and short-circuits OPTIONS preflights with `200 OK` before any auth filter sees them. Bundled from the hand-rolled `CORSFilter` that `ramaservice` and `his-service` each carried separately — see issue #26.
+
+The `Idempotency-Key` header (or whatever `rama.idempotency.header-name` resolves to) is automatically merged into the `allowedHeaders` list, so the frontend's `@ramathibodi/nuxt-commons` POST-side header (rama-modules#232) works without you having to maintain the list in two places.
+
+**Disable** when you use Spring's idiomatic `CorsConfigurationSource`-based CORS handling (Spring Security `.cors()` or `WebMvcConfigurer.addCorsMappings`): the blanket filter would overwrite the headers your `CorsConfigurationSource` computes.
+
+```properties
+rama.cors.enabled=false
+```
+
+### `CorsConfigurationSource` augmenter — `rama.idempotency.cors.augment` (default **true**)
+
+For consumers that **do** use Spring's idiomatic CORS, a `BeanPostProcessor` wraps every `CorsConfigurationSource` bean in `IdempotencyAwareCorsConfigurationSource`. The decorator returns a per-request copy of the delegate's `CorsConfiguration` with the idempotency header appended to `allowedHeaders` — never mutating the delegate. Strictly additive: it leaves the policy unchanged when `allowedHeaders == null` ("allow all"), contains `"*"` (wildcard), or already lists the header (case-insensitive).
+
+```properties
+rama.idempotency.cors.augment=false   # opt out
+```
+
+The augmenter and the blanket filter are independent — when both are on, the blanket filter's headers win because it writes them at `HIGHEST_PRECEDENCE` before any handler runs. If the blanket filter doesn't fit your needs, set `rama.cors.enabled=false` and let the augmenter keep your `CorsConfigurationSource` in sync with the idempotency header name.
+
+## 10. GraphQL Legacy Scalar Coercion
+
+`rama.graphql.legacy-coercion.enabled` (default **true**) wires graphql-java's `LegacyCoercingInputInterceptor.migratesValues()` as an Instrumentation so the built-in `Boolean` / `Float` / `Int` / `String` scalars accept the pre-graphql-java-22 lenient coercions (`Integer` ↔ `String`, `"true"` ↔ `Boolean`, etc.). Bundled from the hand-rolled `GraphQlStringCoercionConfig` `ramaservice` and `his-service` each carried — see issue #27.
+
+Set to `false` to opt back into graphql-java's strict spec compliance for spec-clean clients:
+
+```properties
+rama.graphql.legacy-coercion.enabled=false
+```
+
+The customizer is registered via `@ConditionalOnMissingBean(name = "ramaStarterLegacyCoercionCustomizer")`, so consumers can still drop in their own `GraphQlSourceBuilderCustomizer` with a different interceptor configuration if they need to tune the coercion policy.

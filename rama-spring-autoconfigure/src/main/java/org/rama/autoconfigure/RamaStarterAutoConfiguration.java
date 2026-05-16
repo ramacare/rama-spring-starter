@@ -18,10 +18,23 @@ import org.hibernate.event.spi.EventType;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.jpa.boot.spi.IntegratorProvider;
 import org.hibernate.service.spi.SessionFactoryServiceRegistry;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
 import org.quartz.Scheduler;
+import org.quartz.SimpleScheduleBuilder;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
+import org.rama.aspect.IdempotencyAspect;
 import org.rama.entity.Revision;
 import org.rama.entity.api.Api;
 import org.rama.entity.security.ApiKey;
+import org.rama.entity.system.SystemRequestDedup;
+import org.rama.job.system.SystemRequestDedupCleanupJob;
+import org.rama.repository.system.SystemRequestDedupRepository;
+import org.rama.service.idempotency.IdempotencyProperties;
+import org.rama.service.idempotency.IdempotencyService;
+import org.rama.service.idempotency.ResponseCodec;
+import org.rama.service.idempotency.SignatureResolver;
 import org.rama.ftp.FtpProperties;
 import org.rama.graphql.StarterGraphqlExceptionResolver;
 import org.rama.graphql.directive.AuthDirectiveInstrumentation;
@@ -112,6 +125,7 @@ import tools.jackson.databind.cfg.CoercionInputShape;
 import tools.jackson.databind.json.JsonMapper;
 
 import javax.sql.DataSource;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -126,12 +140,12 @@ import java.util.Map;
         // spring.liquibase.change-log. See starter#13.
         "org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration"
 })
-@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class})
+@EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class, IdempotencyProperties.class})
 @PropertySource(value = "classpath:rama-quartz-defaults.properties", ignoreResourceNotFound = true)
 @org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
-    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class})
+    @org.springframework.boot.persistence.autoconfigure.EntityScan(basePackageClasses = {Api.class, Revision.class, ApiKey.class, SystemRequestDedup.class})
     @ConditionalOnProperty(prefix = "rama.jpa", name = "enabled", havingValue = "true", matchIfMissing = true)
     static class RamaStarterJpaConfiguration {
     }
@@ -290,6 +304,81 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(QuartzService.class)
     SchedulerController schedulerController(QuartzService quartzService, org.springframework.core.env.Environment environment, List<Scheduler> schedulers) {
         return new SchedulerController(quartzService, environment, schedulers);
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(prefix = "rama.idempotency", name = "enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(SystemRequestDedupRepository.class)
+    static class RamaStarterIdempotencyConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(name = "idempotencyClock")
+        Clock idempotencyClock() {
+            return Clock.systemUTC();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        SignatureResolver signatureResolver(EnvironmentService environmentService,
+                                            IdempotencyProperties properties,
+                                            @org.springframework.beans.factory.annotation.Qualifier("idempotencyClock") Clock clock) {
+            return new SignatureResolver(environmentService, properties, clock);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        ResponseCodec responseCodec() {
+            return new ResponseCodec();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        IdempotencyService idempotencyService(SystemRequestDedupRepository repository,
+                                              EntityManager entityManager,
+                                              ResponseCodec responseCodec,
+                                              org.springframework.transaction.PlatformTransactionManager transactionManager) {
+            return new IdempotencyService(repository, entityManager, responseCodec, transactionManager);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        IdempotencyAspect idempotencyAspect(IdempotencyService idempotencyService,
+                                            SignatureResolver signatureResolver,
+                                            EnvironmentService environmentService,
+                                            IdempotencyProperties properties,
+                                            @org.springframework.beans.factory.annotation.Qualifier("idempotencyClock") Clock clock) {
+            return new IdempotencyAspect(idempotencyService, signatureResolver, environmentService, properties, clock);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        SystemRequestDedupCleanupJob systemRequestDedupCleanupJob(SystemRequestDedupRepository repository) {
+            return new SystemRequestDedupCleanupJob(repository);
+        }
+
+        @Bean
+        @ConditionalOnBean(Scheduler.class)
+        @ConditionalOnMissingBean(name = "systemRequestDedupCleanupJobDetail")
+        JobDetail systemRequestDedupCleanupJobDetail() {
+            return JobBuilder.newJob(SystemRequestDedupCleanupJob.class)
+                    .withIdentity("system-request-dedup-cleanup", "rama-idempotency")
+                    .storeDurably()
+                    .build();
+        }
+
+        @Bean
+        @ConditionalOnBean(Scheduler.class)
+        @ConditionalOnMissingBean(name = "systemRequestDedupCleanupTrigger")
+        Trigger systemRequestDedupCleanupTrigger(JobDetail systemRequestDedupCleanupJobDetail, IdempotencyProperties properties) {
+            long intervalMs = Math.max(1_000L, properties.getCleanupInterval().toMillis());
+            return TriggerBuilder.newTrigger()
+                    .forJob(systemRequestDedupCleanupJobDetail)
+                    .withIdentity("system-request-dedup-cleanup-trigger", "rama-idempotency")
+                    .withSchedule(SimpleScheduleBuilder.simpleSchedule()
+                            .withIntervalInMilliseconds(intervalMs)
+                            .repeatForever())
+                    .build();
+        }
     }
 
     @Bean
@@ -622,6 +711,27 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnProperty(prefix = "rama.graphql", name = "enabled", havingValue = "true", matchIfMissing = true)
     GraphQlSourceBuilderCustomizer ramaStarterAuthDirectiveCustomizer() {
         return builder -> builder.instrumentation(List.of(new AuthDirectiveInstrumentation()));
+    }
+
+    /**
+     * Legacy scalar coercion shim (issue #27). graphql-java 22 tightened
+     * built-in scalar coercion ({@code Integer} → {@code String} etc.) — clients
+     * written against the pre-Spring-Boot-4 stack relied on the lenient
+     * fallbacks. The shim restores that behaviour via graphql-java's official
+     * {@code LegacyCoercingInputInterceptor.migratesValues()} migration hook.
+     * Default <strong>on</strong> — both source consumers (`ramaservice`,
+     * `his-service`) already enabled this via a hand-rolled
+     * {@code GraphQlStringCoercionConfig}; flipping the default to true on
+     * bundling preserves their behaviour without requiring a property line
+     * during migration. Set {@code rama.graphql.legacy-coercion.enabled=false}
+     * to opt back into graphql-java's strict default for new spec-clean clients.
+     */
+    @Bean
+    @ConditionalOnClass(GraphQlSourceBuilderCustomizer.class)
+    @ConditionalOnMissingBean(name = "ramaStarterLegacyCoercionCustomizer")
+    @ConditionalOnProperty(prefix = "rama.graphql.legacy-coercion", name = "enabled", havingValue = "true", matchIfMissing = true)
+    GraphQlSourceBuilderCustomizer ramaStarterLegacyCoercionCustomizer() {
+        return builder -> builder.instrumentation(List.of(new org.rama.graphql.LegacyScalarCoercionInstrumentation()));
     }
 
     @Bean
