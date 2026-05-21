@@ -8,24 +8,48 @@ import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.rama.entity.Response;
 import org.rama.service.system.QuartzService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.env.Environment;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.stereotype.Controller;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * GraphQL controller for inspecting and managing Quartz scheduler jobs at
+ * runtime. {@link QuartzService} is wired via {@link ObjectProvider} so that
+ * consumers without Quartz on the classpath can still component-scan this
+ * controller without an autowire failure — handlers degrade gracefully when
+ * the service is absent (queries return empty/null, mutations return a
+ * {@link Response} with {@code success=false}).
+ */
+@Controller
 @RequiredArgsConstructor
 public class SchedulerController {
-    private final QuartzService quartzService;
+    private final ObjectProvider<QuartzService> quartzServiceProvider;
     private final Environment environment;
     private final List<Scheduler> schedulers;
 
+    private QuartzService quartzService() {
+        QuartzService service = quartzServiceProvider.getIfAvailable();
+        if (service == null) {
+            throw new IllegalStateException("Quartz is not enabled in this application");
+        }
+        return service;
+    }
+
     @QueryMapping
     public Response scheduleJobClasses() {
-        return Response.of(true,null,quartzService.getAllJobClasses());
+        try {
+            return Response.of(true, null, quartzService().getAllJobClasses());
+        } catch (RuntimeException e) {
+            return Response.of(false, e.getMessage(), null);
+        }
     }
 
     @QueryMapping
@@ -33,7 +57,7 @@ public class SchedulerController {
         List<Map<String, Object>> allSchedules = new ArrayList<>();
         for (Scheduler scheduler : schedulers) {
             String schedulerName = scheduler.getSchedulerName();
-            List<Map<String, Object>> schedules = quartzService.getAllSchedules(scheduler);
+            List<Map<String, Object>> schedules = quartzService().getAllSchedules(scheduler);
             schedules.forEach(s -> s.put("scheduler", schedulerName));
             allSchedules.addAll(schedules);
         }
@@ -45,7 +69,7 @@ public class SchedulerController {
         List<Map<String, Object>> allJobs = new ArrayList<>();
         for (Scheduler scheduler : schedulers) {
             String schedulerName = scheduler.getSchedulerName();
-            List<Map<String, Object>> jobs = quartzService.getAllJobs(scheduler).stream().map(job -> {
+            List<Map<String, Object>> jobs = quartzService().getAllJobs(scheduler).stream().map(job -> {
                 Map<String, Object> map = jobDetailToMap(job);
                 map.put("scheduler", schedulerName);
                 return map;
@@ -57,7 +81,9 @@ public class SchedulerController {
 
     @QueryMapping
     public Map<String, Object> scheduleJobByNameAndGroup(@Argument String name, @Argument String group) throws SchedulerException {
-        JobDetail job = quartzService.getJob(name, group);
+        QuartzService service = quartzServiceProvider.getIfAvailable();
+        if (service == null) return null;
+        JobDetail job = service.getJob(name, group);
         if (job == null) return null;
 
         return jobDetailToMap(job);
@@ -78,7 +104,7 @@ public class SchedulerController {
     public Response createScheduleJobCron(@Argument String name, @Argument String group, @Argument String cronExpression, @Argument String jobClass, @Argument String description, @Argument Map<String, Object> jobData) {
         try {
             validatePositiveLongIfPresent(jobData, "chunkSize");
-            return Response.of(quartzService.scheduleJob(name, group, cronExpression, jobClass, description,jobData));
+            return Response.of(quartzService().scheduleJob(name, group, cronExpression, jobClass, description,jobData));
         } catch (RuntimeException e) {
             return Response.of(false,e.getMessage(),null);
         }
@@ -88,7 +114,7 @@ public class SchedulerController {
     public Response createScheduleJobOneTime(@Argument String name, @Argument String group, @Argument String jobClass, @Argument String description,@Argument Map<String, Object> jobData) {
         try {
             validatePositiveLongIfPresent(jobData, "chunkSize");
-            return Response.of(quartzService.scheduleOneTimeJob(name, group, jobClass, description,jobData));
+            return Response.of(quartzService().scheduleOneTimeJob(name, group, jobClass, description,jobData));
         } catch (RuntimeException e) {
             return Response.of(false,e.getMessage(),null);
         }
@@ -128,10 +154,11 @@ public class SchedulerController {
 
             validatePositiveLongIfPresent(finalJobData, "chunkSize");
 
+            QuartzService service = quartzService();
             if (cronExpression != null && !cronExpression.isEmpty()) {
-                return Response.of(quartzService.scheduleJob(name, group, cronExpression, jobClass, description, finalJobData, targetScheduler));
+                return Response.of(service.scheduleJob(name, group, cronExpression, jobClass, description, finalJobData, targetScheduler));
             } else {
-                return Response.of(quartzService.scheduleOneTimeJob(name, group, jobClass, description, finalJobData, targetScheduler));
+                return Response.of(service.scheduleOneTimeJob(name, group, jobClass, description, finalJobData, targetScheduler));
             }
         } catch (RuntimeException e) {
             return Response.of(false, e.getMessage(), null);
@@ -175,9 +202,10 @@ public class SchedulerController {
     @MutationMapping
     public Response deleteScheduleJob(@Argument String name, @Argument String group) {
         try {
+            QuartzService service = quartzService();
             boolean wasDeleted = false;
             for (Scheduler scheduler : schedulers) {
-                if (quartzService.deleteJob(name, group, scheduler)) {
+                if (service.deleteJob(name, group, scheduler)) {
                     wasDeleted = true;
                 }
             }
@@ -190,7 +218,7 @@ public class SchedulerController {
     @MutationMapping
     public Response triggerScheduleJob(@Argument String name, @Argument String group) {
         try {
-            return Response.of(quartzService.triggerNow(name, group));
+            return Response.of(quartzService().triggerNow(name, group));
         } catch (RuntimeException e) {
             return Response.of(false,e.getMessage(),null);
         }
