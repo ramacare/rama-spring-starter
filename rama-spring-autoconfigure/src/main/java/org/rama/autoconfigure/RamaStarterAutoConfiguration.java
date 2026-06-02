@@ -107,6 +107,9 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
@@ -128,8 +131,16 @@ import java.time.Clock;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
-@AutoConfiguration(afterName = {
+@AutoConfiguration(beforeName = {
+        // Our ramaSecurityContextAsyncConfigurer (an AsyncConfigurer) must be registered
+        // before Boot evaluates TaskExecutionAutoConfiguration's
+        // @ConditionalOnMissingBean(AsyncConfigurer.class) / @ConditionalOnBean(AsyncConfigurer.class),
+        // so Boot wraps OUR configurer (security-context-propagating) instead of registering its
+        // own null-delegate default. See starter#29.
+        "org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration"
+}, afterName = {
         "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration",
         "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration",
         "org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration",
@@ -216,6 +227,37 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnMissingBean
     EnvironmentService environmentService(org.springframework.core.env.Environment environment, ObjectProvider<StaticValueResolver> staticValueResolver) {
         return new EnvironmentService(environment, staticValueResolver);
+    }
+
+    /**
+     * Propagate the {@link org.springframework.security.core.context.SecurityContext}
+     * into {@code @Async} executions so the global Auditable userstamp listener resolves
+     * the originating authenticated user even when the entity flush happens on a
+     * thread-pool thread (e.g. {@code RevisionService.saveRevision}, or any consumer
+     * {@code @Async} service that persists an {@link org.rama.entity.Auditable}).
+     *
+     * <p>Without this, {@code SecurityContextHolder} (a plain ThreadLocal by default)
+     * is empty on the async thread and {@code createdBy}/{@code updatedBy} fall back to
+     * the static-value fallback key (or null) instead of the real user. See starter#29.
+     *
+     * <p>Backs off if the consumer supplies their own {@link AsyncConfigurer}. Reuses
+     * Boot's tuned {@code applicationTaskExecutor} when present; otherwise creates a
+     * default {@link ThreadPoolTaskExecutor}.
+     */
+    @Bean
+    @ConditionalOnMissingBean(AsyncConfigurer.class)
+    AsyncConfigurer ramaSecurityContextAsyncConfigurer(ObjectProvider<ThreadPoolTaskExecutor> taskExecutorProvider) {
+        return new AsyncConfigurer() {
+            @Override
+            public Executor getAsyncExecutor() {
+                ThreadPoolTaskExecutor delegate = taskExecutorProvider.getIfUnique();
+                if (delegate == null) {
+                    delegate = new ThreadPoolTaskExecutor();
+                    delegate.initialize();
+                }
+                return new DelegatingSecurityContextAsyncTaskExecutor(delegate);
+            }
+        };
     }
 
     @Bean
