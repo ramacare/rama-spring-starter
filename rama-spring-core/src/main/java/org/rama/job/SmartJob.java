@@ -4,10 +4,14 @@ import org.quartz.*;
 import org.rama.service.system.SystemLogService;
 import org.rama.service.system.SystemParameterService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.Date;
 
 @Component
@@ -18,22 +22,45 @@ public abstract class SmartJob implements Job {
     protected SystemParameterService systemParameterService;
 
     public void execute(JobExecutionContext jobExecutionContext) throws JobExecutionException {
-        JobDetail jobDetail = executeInternal(jobExecutionContext);
-        JobDataMap dataMap = jobDetail.getJobDataMap();
+        // Quartz worker threads carry no authenticated SecurityContext, so the global
+        // Auditable userstamp listener would stamp createdBy/updatedBy as null/fallback.
+        // Establish a synthetic principal (the job name) for the duration of the run so
+        // entities written by the job are attributable to it. Cleared in finally —
+        // Quartz threads are pooled and a leaked context would bleed into the next job.
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(
+                resolveJobPrincipal(jobExecutionContext), "N/A", Collections.emptyList()));
+        SecurityContextHolder.setContext(context);
+        try {
+            JobDetail jobDetail = executeInternal(jobExecutionContext);
+            JobDataMap dataMap = jobDetail.getJobDataMap();
 
-        if (dataMap.getBoolean("runNext")) {
-            Long runNextSeconds = dataMap.containsKey("runNextSeconds") ? Long.parseLong(dataMap.get("runNextSeconds").toString()) : null;
-            dataMap.remove("runNext");
-            dataMap.remove("runNextSeconds");
-            reschedule(jobExecutionContext, jobDetail, dataMap, runNextSeconds);
-        } else {
-            try {
-                jobExecutionContext.getScheduler().addJob(jobDetail, true);
-                removeNextRun(jobExecutionContext);
-            } catch (SchedulerException e) {
-                throw new RuntimeException("Failed to persist job result", e);
+            if (dataMap.getBoolean("runNext")) {
+                Long runNextSeconds = dataMap.containsKey("runNextSeconds") ? Long.parseLong(dataMap.get("runNextSeconds").toString()) : null;
+                dataMap.remove("runNext");
+                dataMap.remove("runNextSeconds");
+                reschedule(jobExecutionContext, jobDetail, dataMap, runNextSeconds);
+            } else {
+                try {
+                    jobExecutionContext.getScheduler().addJob(jobDetail, true);
+                    removeNextRun(jobExecutionContext);
+                } catch (SchedulerException e) {
+                    throw new RuntimeException("Failed to persist job result", e);
+                }
             }
+        } finally {
+            SecurityContextHolder.clearContext();
         }
+    }
+
+    /**
+     * Principal stamped onto entities written during this job's execution. Defaults to
+     * the job's key name (so audit/revision rows attribute writes to the specific job),
+     * falling back to {@code "quartz"} when the name is absent. Override to customise.
+     */
+    protected String resolveJobPrincipal(JobExecutionContext jobExecutionContext) {
+        String name = jobExecutionContext.getJobDetail().getKey().getName();
+        return (name == null || name.isBlank()) ? "quartz" : name;
     }
 
     public JobDetail executeInternal(JobExecutionContext jobExecutionContext) throws JobExecutionException {
