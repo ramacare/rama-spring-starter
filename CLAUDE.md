@@ -95,6 +95,7 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `minio.endpoint`, `minio.access-key`, `minio.secret-key` -- MinIO connection
 - `encrypt.key` -- AES encryption key
 - `document.*` -- Document processing (Gotenberg server, patterns)
+- `document.base-template-property` -- name of the docx custom property naming a centralized base template (default `BaseTemplate`). When a template sets this property to a `template_code`, the print flow renders the original template's **body** inside the **header/footer + page layout** of the resolved base template. Resolution is delegated to a consumer-provided `BaseTemplateResolver` bean (the starter ships a no-op default via `@ConditionalOnMissingBean`, so the feature is off until a consumer wires its `TemplateResolver`). The resolver must return an already-preprocessed docx stream, so the `docx-template-cache$` cache is reused unchanged. One nesting level only; the merge is performed by `HeaderFooterMerger`
 - `app.file-storage-path`, `app.file-storage-location` -- File storage config
 - `rama.ftp.host`, `rama.ftp.port`, `rama.ftp.username`, `rama.ftp.password` -- FTP connection
 
