@@ -20,6 +20,8 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Renders document-template JSON (a {@code DocumentTemplateItem} array, as produced by
@@ -203,7 +205,14 @@ public class DocumentTemplateJsonRenderer {
     // ---------- placeholders + hook attributes ----------
 
     private String placeholder(String key, String type, Map<String, Object> item) {
-        return "{{" + key + hookSuffix(type, item) + "}}";
+        // FormFile may hold a non-image attachment (e.g. accept="application/pdf"):
+        // render its file name(s) instead of trying to embed it as a picture.
+        if ("FormFile".equals(type) && !isImageAccept(item)) {
+            String fileNameHook = isMultiple(item) ? ";join=originalFileName" : "";
+            String fileNameKey = isMultiple(item) ? key : key + ".originalFileName";
+            return "{{" + fileNameKey + fileNameHook + printConfigSuffix(item) + "}}";
+        }
+        return "{{" + key + hookSuffix(type, item) + printConfigSuffix(item) + "}}";
     }
 
     private String hookSuffix(String type, Map<String, Object> item) {
@@ -217,6 +226,52 @@ public class DocumentTemplateJsonRenderer {
             case "FormSignPad", "FormFile" -> ";image";
             default -> "";
         };
+    }
+
+    /**
+     * Appends author-supplied docx hook attributes from the item's {@code printConfig} — the
+     * print-side escape hatch for config the Vue form template can't imply (image {@code width},
+     * date {@code format}, {@code prefix}/{@code suffix}, forcing {@code qrcode}/{@code barcode},
+     * …). Accepts an object map ({@code {"width":2}} → {@code ;width=2}; boolean/blank values →
+     * bare flags like {@code ;qrcode}) or a raw attribute string ({@code "format=dd/MM/yyyy"}).
+     */
+    private String printConfigSuffix(Map<String, Object> item) {
+        Object printConfig = item.get("printConfig");
+        if (printConfig instanceof Map<?, ?> map) {
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String attr = asString(entry.getKey()).trim();
+                if (attr.isEmpty()) continue;
+                Object value = entry.getValue();
+                if (value == null || Boolean.TRUE.equals(value) || asString(value).isEmpty()) {
+                    sb.append(';').append(attr);
+                } else {
+                    sb.append(';').append(attr).append('=').append(asString(value));
+                }
+            }
+            return sb.toString();
+        }
+        if (printConfig instanceof String raw && !raw.isBlank()) {
+            return ";" + raw.trim().replaceAll("^;+", "");
+        }
+        return "";
+    }
+
+    /** True when the FormFile accepts images, or declares no {@code accept} at all. */
+    private boolean isImageAccept(Map<String, Object> item) {
+        String accept = inputAttribute(item, "accept");
+        return accept.isEmpty() || accept.toLowerCase().contains("image");
+    }
+
+    private boolean isMultiple(Map<String, Object> item) {
+        return asString(item.get("inputAttributes")).matches("(?s).*\\bmultiple\\b.*");
+    }
+
+    /** Extracts a quoted/bare attribute value from the raw {@code inputAttributes} string. */
+    private String inputAttribute(Map<String, Object> item, String name) {
+        String attributes = asString(item.get("inputAttributes"));
+        Matcher matcher = Pattern.compile(name + "\\s*=\\s*\"([^\"]*)\"").matcher(attributes);
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     // ---------- table helpers ----------

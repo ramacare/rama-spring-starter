@@ -164,6 +164,72 @@ class DocumentTemplateJsonRendererTest {
                 .contains("{{attachment;image}}");
     }
 
+    // ---------- printConfig (author-supplied docx hook attributes) ----------
+
+    @Test
+    void printConfigObjectAppendsAttributesToPlaceholder() {
+        Map<String, Object> cfg = new LinkedHashMap<>();
+        cfg.put("singleline", true);
+        cfg.put("prefix", "Mr.");
+        XWPFDocument doc = render(template(
+                item("VTextField", "width", 6, "variableName", "name", "printConfig", cfg)));
+        assertThat(allText(doc)).contains("{{name;singleline;prefix=Mr.}}");
+    }
+
+    @Test
+    void printConfigStringFormIsAppended() {
+        XWPFDocument doc = render(template(
+                item("FormDate", "width", 6, "variableName", "d", "printConfig", "format=dd/MM/yyyy")));
+        assertThat(allText(doc)).contains("{{d;date;format=dd/MM/yyyy}}");
+    }
+
+    @Test
+    void printConfigSuppliesImageWidth() {
+        Map<String, Object> cfg = new LinkedHashMap<>();
+        cfg.put("width", 2);
+        XWPFDocument doc = render(template(
+                item("FormSignPad", "width", 6, "variableName", "sig", "printConfig", cfg)));
+        assertThat(allText(doc)).contains("{{sig;image;width=2}}");
+    }
+
+    @Test
+    void printConfigCanIntroduceAHook() {
+        Map<String, Object> cfg = new LinkedHashMap<>();
+        cfg.put("qrcode", true);
+        cfg.put("width", 1);
+        XWPFDocument doc = render(template(
+                item("VTextField", "width", 6, "variableName", "code", "printConfig", cfg)));
+        assertThat(allText(doc)).contains("{{code;qrcode;width=1}}");
+    }
+
+    // ---------- FormFile: image vs. file name ----------
+
+    @Test
+    void formFileWithImageAcceptEmitsImageHook() {
+        XWPFDocument doc = render(template(
+                item("FormFile", "width", 6, "variableName", "photo",
+                        "inputAttributes", "accept=\"image/*\"")));
+        assertThat(allText(doc)).contains("{{photo;image}}");
+    }
+
+    @Test
+    void formFileWithNonImageAcceptRendersOriginalFileName() {
+        XWPFDocument doc = render(template(
+                item("FormFile", "width", 6, "variableName", "doc",
+                        "inputAttributes", "accept=\"application/pdf\"")));
+        String text = allText(doc);
+        assertThat(text).contains("{{doc.originalFileName}}");
+        assertThat(text).doesNotContain(";image");
+    }
+
+    @Test
+    void formFileMultipleNonImageJoinsOriginalFileNames() {
+        XWPFDocument doc = render(template(
+                item("FormFile", "width", 6, "variableName", "docs",
+                        "inputAttributes", "accept=\"application/pdf\" multiple")));
+        assertThat(allText(doc)).contains("{{docs;join=originalFileName}}");
+    }
+
     @Test
     void unknownTypeFallsBackToPlainLabelAndPlaceholder() {
         XWPFDocument doc = render(template(

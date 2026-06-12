@@ -76,7 +76,8 @@ label-above-value.)
 | `MasterAutocomplete` | `{{var;master;groupKey=<inputOptions>}}` |
 | `VCheckbox`, `VSwitch` | `{{var;checkbox}}` (→ ☒ / ☐) |
 | `FormCheckboxGroup` | `{{var;join}}` (array → joined) |
-| `FormSignPad`, `FormFile` | `{{var;image}}` |
+| `FormSignPad` | `{{var;image}}` |
+| `FormFile` | `{{var;image}}` when `inputAttributes` `accept` is image-typed or absent; otherwise the file name(s): `{{var.originalFileName}}`, or `{{var;join=originalFileName}}` when `multiple` |
 | `Header` | bold styled paragraph of `inputLabel` (no placeholder) |
 | `Separator` | row break |
 | `FormTable` / `FormTableData` | bordered table (see below) |
@@ -86,6 +87,24 @@ label-above-value.)
 
 `var` is `variableName` (sanitised). Where `variableName` is missing for a value
 field, the field is skipped (label-only) with a debug log.
+
+### `printConfig` — author-supplied docx hook attributes
+
+Some docx hook config can't be inferred from a Vue form template (image `width`,
+date `format`/`locale`, `prefix`/`suffix`, forcing `qrcode`/`barcode`, …). A new
+**`printConfig`** field on the template item carries these and is appended to the
+emitted placeholder's attributes:
+
+- object map — `{"width": 2}` → `;width=2`; a boolean-`true`/blank value → a bare
+  flag (`{"qrcode": true}` → `;qrcode`). Entry order is preserved.
+- raw string — `"format=dd/MM/yyyy"` → `;format=dd/MM/yyyy`.
+
+So `FormSignPad` + `printConfig {"width": 2}` → `{{sig;image;width=2}}`, and any field
+can be promoted to e.g. a QR code via `printConfig {"qrcode": true, "width": 1}`.
+
+This field is **print-target-only** (the Vue renderer ignores it). It must be added
+to the `rama-modules` template-JSON spec/types/builder — tracked as a separate issue
+in that repo.
 
 ### FormTable / FormTableData
 
