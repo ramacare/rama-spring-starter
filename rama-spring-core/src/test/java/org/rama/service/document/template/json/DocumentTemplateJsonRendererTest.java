@@ -143,6 +143,29 @@ class DocumentTemplateJsonRendererTest {
     }
 
     @Test
+    void masterAutocompleteOmitsGroupKeyWhenInputOptionsMissing() throws Exception {
+        // No inputOptions: emit a bare ;master (MasterHooks no-ops, renders the raw value)
+        // rather than ;master;groupKey= which would look up an empty group and render blank.
+        try (XWPFDocument doc = render(template(
+                item("MasterAutocomplete", "width", 6, "variableName", "country")))) {
+            String text = allText(doc);
+            assertThat(text).contains("{{country;master}}");
+            assertThat(text).doesNotContain("groupKey=");
+        }
+    }
+
+    @Test
+    void masterAutocompleteOmitsGroupKeyWhenInputOptionsNotAString() throws Exception {
+        try (XWPFDocument doc = render(template(
+                item("MasterAutocomplete", "width", 6, "variableName", "country",
+                        "inputOptions", Map.of("foo", "bar"))))) {
+            String text = allText(doc);
+            assertThat(text).contains("{{country;master}}");
+            assertThat(text).doesNotContain("groupKey=");
+        }
+    }
+
+    @Test
     void checkboxAndSwitchEmitCheckboxHook() throws Exception {
         try (XWPFDocument checkbox = render(template(item("VCheckbox", "width", 6, "variableName", "agree")));
              XWPFDocument vswitch = render(template(item("VSwitch", "width", 6, "variableName", "active")))) {
@@ -206,6 +229,27 @@ class DocumentTemplateJsonRendererTest {
         try (XWPFDocument doc = render(template(
                 item("VTextField", "width", 6, "variableName", "code", "printConfig", cfg)))) {
             assertThat(allText(doc)).contains("{{code;qrcode;width=1}}");
+        }
+    }
+
+    @Test
+    void printConfigStripsBracesThatWouldBreakThePlaceholder() throws Exception {
+        // Author-supplied printConfig must not be able to truncate the {{…}} envelope.
+        Map<String, Object> cfg = new LinkedHashMap<>();
+        cfg.put("prefix", "a}}b{{c");
+        try (XWPFDocument doc = render(template(
+                item("VTextField", "width", 6, "variableName", "name", "printConfig", cfg)))) {
+            String text = allText(doc);
+            assertThat(text).contains("{{name;prefix=abc}}");
+            assertThat(text).doesNotContain("a}}b");
+        }
+    }
+
+    @Test
+    void printConfigRawStringStripsBraces() throws Exception {
+        try (XWPFDocument doc = render(template(
+                item("FormDate", "width", 6, "variableName", "d", "printConfig", "format=dd}}/MM")))) {
+            assertThat(allText(doc)).contains("{{d;date;format=dd/MM}}");
         }
     }
 

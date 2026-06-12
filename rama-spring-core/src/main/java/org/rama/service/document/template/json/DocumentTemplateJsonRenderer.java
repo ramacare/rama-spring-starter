@@ -221,12 +221,27 @@ public class DocumentTemplateJsonRenderer {
             case "FormDate" -> ";date";
             case "FormTime" -> ";time";
             case "FormDateTime" -> ";datetime";
-            case "MasterAutocomplete" -> ";master;groupKey=" + asString(item.get("inputOptions"));
+            case "MasterAutocomplete" -> masterHook(item);
             case "VCheckbox", "VSwitch" -> ";checkbox";
             case "FormCheckboxGroup" -> ";join";
             case "FormSignPad", "FormFile" -> ";image";
             default -> "";
         };
+    }
+
+    /**
+     * {@code ;master} hook for {@code MasterAutocomplete}. Only appends {@code groupKey=} when
+     * {@code inputOptions} is a non-blank string group code (per the template spec). When it is
+     * absent or non-string, the key is omitted so {@link
+     * org.rama.service.document.template.hooks.MasterHooks} treats it as a no-op (renders the raw
+     * value) instead of looking up an empty/garbage group and rendering blank.
+     */
+    private String masterHook(Map<String, Object> item) {
+        Object inputOptions = item.get("inputOptions");
+        if (inputOptions instanceof String groupKey && !groupKey.isBlank()) {
+            return ";master;groupKey=" + groupKey.trim();
+        }
+        return ";master";
     }
 
     /**
@@ -241,21 +256,31 @@ public class DocumentTemplateJsonRenderer {
         if (printConfig instanceof Map<?, ?> map) {
             StringBuilder sb = new StringBuilder();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String attr = asString(entry.getKey()).trim();
+                String attr = stripPlaceholderBreakers(asString(entry.getKey()).trim());
                 if (attr.isEmpty()) continue;
                 Object value = entry.getValue();
                 if (value == null || Boolean.TRUE.equals(value) || asString(value).isEmpty()) {
                     sb.append(';').append(attr);
                 } else {
-                    sb.append(';').append(attr).append('=').append(asString(value));
+                    sb.append(';').append(attr).append('=').append(stripPlaceholderBreakers(asString(value)));
                 }
             }
             return sb.toString();
         }
         if (printConfig instanceof String raw && !raw.isBlank()) {
-            return ";" + raw.trim().replaceAll("^;+", "");
+            String cleaned = stripPlaceholderBreakers(raw.trim()).replaceAll("^;+", "");
+            return cleaned.isEmpty() ? "" : ";" + cleaned;
         }
         return "";
+    }
+
+    /**
+     * Removes characters that would corrupt the surrounding {@code {{…}}} placeholder envelope.
+     * {@code printConfig} is author-supplied free text, so a stray {@code &#123;}/{@code &#125;} or
+     * newline could otherwise truncate the placeholder for the downstream {@code {{(.+?)}}} parser.
+     */
+    private String stripPlaceholderBreakers(String value) {
+        return value.replaceAll("[{}\\r\\n]", "");
     }
 
     /** True when the FormFile accepts images, or declares no {@code accept} at all. */
