@@ -9,6 +9,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
 import org.rama.service.document.BarcodeService;
 import org.rama.service.document.PdfService;
 import org.rama.service.document.template.docx.DocxTemplateHelper;
+import org.rama.service.document.template.docx.HeaderFooterMerger;
 import org.rama.service.document.template.docx.ReplacePlaceholder;
 import org.rama.service.document.template.docx.ReplaceSection;
 import org.slf4j.Logger;
@@ -36,25 +37,34 @@ public class DocxTemplateProcessor implements TemplateProcessor {
 
     private final ReplacePlaceholder replacePlaceholder;
     private final ReplaceSection replaceSection;
+    private final String baseTemplateProperty;
+    private final HeaderFooterMerger headerFooterMerger;
+    private final BaseTemplateResolver baseTemplateResolver;
 
     public DocxTemplateProcessor(
             String placeholderPattern,
             String repeatAttributeProperty,
             String maximumPagesProperty,
+            String baseTemplateProperty,
             BarcodeService barcodeService,
             PdfService pdfService,
             ReplacementProcessor replacementProcessor,
             ReplacePlaceholder replacePlaceholder,
-            ReplaceSection replaceSection
+            ReplaceSection replaceSection,
+            HeaderFooterMerger headerFooterMerger,
+            BaseTemplateResolver baseTemplateResolver
     ) {
         this.compiledPattern = Pattern.compile(placeholderPattern);
         this.repeatAttributeProperty = repeatAttributeProperty;
         this.maximumPagesProperty = maximumPagesProperty;
+        this.baseTemplateProperty = baseTemplateProperty;
         this.barcodeService = barcodeService;
         this.pdfService = pdfService;
         this.replacementProcessor = replacementProcessor;
         this.replacePlaceholder = replacePlaceholder;
         this.replaceSection = replaceSection;
+        this.headerFooterMerger = headerFooterMerger;
+        this.baseTemplateResolver = baseTemplateResolver;
     }
 
     @Override
@@ -76,6 +86,35 @@ public class DocxTemplateProcessor implements TemplateProcessor {
                 POIXMLProperties.CustomProperties customProperties = document.getProperties().getCustomProperties();
 
                 int maximumPages = readMaximumPages(customProperties);
+
+                String baseTemplateCode = readBaseTemplate(customProperties);
+                if (baseTemplateCode != null) {
+                    Optional<InputStream> baseStream = Optional.empty();
+                    try {
+                        baseStream = baseTemplateResolver.resolve(baseTemplateCode, replacements);
+                    } catch (Exception e) {
+                        log.warn("BaseTemplate '{}' resolution failed; rendering without base template", baseTemplateCode, e);
+                    }
+                    if (baseStream != null && baseStream.isPresent()) {
+                        if (customProperties.contains(repeatAttributeProperty)
+                                && customProperties.getProperty(repeatAttributeProperty).isSetLpwstr()) {
+                            String repeatAttribute = customProperties.getProperty(repeatAttributeProperty).getLpwstr();
+                            Object value = (replacements != null) ? replacements.get(repeatAttribute) : null;
+                            if (value instanceof Collection<?> collection) {
+                                byte[] baseBytes = baseStream.get().readAllBytes();
+                                List<byte[]> pdfs = new ArrayList<>(collection.size());
+                                for (Object item : collection) {
+                                    replacements.put(repeatAttribute + "Item", item);
+                                    pdfs.add(processWithBaseTemplate(originalContent,
+                                            new ByteArrayInputStream(baseBytes), replacements, maximumPages));
+                                }
+                                return pdfService.mergePdfBytesBlocking(pdfs);
+                            }
+                        }
+                        return processWithBaseTemplate(originalContent, baseStream.get(), replacements, maximumPages);
+                    }
+                    // not found -> fall through to existing normal processing
+                }
 
                 // Repeat mode: produce multiple PDFs and merge (bytes-first)
                 if (customProperties != null && customProperties.contains(repeatAttributeProperty) && customProperties.getProperty(repeatAttributeProperty).isSetLpwstr()) {
@@ -120,6 +159,38 @@ public class DocxTemplateProcessor implements TemplateProcessor {
         return 0;
     }
 
+    private String readBaseTemplate(POIXMLProperties.CustomProperties customProperties) {
+        if (customProperties == null) return null;
+        if (!customProperties.contains(baseTemplateProperty)) return null;
+        var p = customProperties.getProperty(baseTemplateProperty);
+        try {
+            if (p.isSetLpwstr()) {
+                String v = p.getLpwstr();
+                return (v != null && !v.isBlank()) ? v.trim() : null;
+            }
+        } catch (Exception ignore) { }
+        return null;
+    }
+
+    private byte[] processWithBaseTemplate(byte[] mainContent, InputStream baseStream,
+                                           Map<String, Object> replacements, int maximumPages) throws IOException {
+        try (XWPFDocument baseDoc = new XWPFDocument(baseStream);
+             XWPFDocument mainDoc = new XWPFDocument(new ByteArrayInputStream(mainContent))) {
+
+            replaceHeadersFooters(baseDoc, replacements);  // base: header/footer placeholders only
+            replaceBody(mainDoc, replacements);            // original: body placeholders only
+            headerFooterMerger.apply(mainDoc, baseDoc);    // graft base header/footer + layout
+
+            byte[] docxBytes;
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                mainDoc.write(out);
+                docxBytes = out.toByteArray();
+            }
+            byte[] pdfBytes = pdfService.convertDocxToPdfBytesBlocking(docxBytes);
+            return (maximumPages > 0) ? pdfService.trimPdfBytesBlocking(pdfBytes, maximumPages) : pdfBytes;
+        }
+    }
+
     private byte[] processDocumentToPdfBytes(XWPFDocument document, Map<String, Object> replacements, int maximumPages) throws IOException {
         processDocument(document, replacements);
 
@@ -137,16 +208,20 @@ public class DocxTemplateProcessor implements TemplateProcessor {
     }
 
     private void processDocument(XWPFDocument document, Map<String, Object> replacements) {
-        Pattern pattern = compiledPattern;
+        replaceBody(document, replacements);
+        replaceHeadersFooters(document, replacements);
+    }
 
-        replacePatternInBody(document, pattern, replacements);
+    private void replaceBody(XWPFDocument document, Map<String, Object> replacements) {
+        replacePatternInBody(document, compiledPattern, replacements);
+    }
 
+    private void replaceHeadersFooters(XWPFDocument document, Map<String, Object> replacements) {
         for (XWPFHeader header : document.getHeaderList()) {
-            replacePatternInBody(header, pattern, replacements);
+            replacePatternInBody(header, compiledPattern, replacements);
         }
-
         for (XWPFFooter footer : document.getFooterList()) {
-            replacePatternInBody(footer, pattern, replacements);
+            replacePatternInBody(footer, compiledPattern, replacements);
         }
     }
 
