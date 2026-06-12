@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 class DocxTemplateProcessorBaseTemplateTest {
@@ -68,6 +69,14 @@ class DocxTemplateProcessorBaseTemplateTest {
         try { return baseDocx(); } catch (Exception e) { throw new RuntimeException(e); }
     }
 
+    private byte[] mainDocxRepeat() throws Exception {
+        XWPFDocument d = new XWPFDocument();
+        d.createParagraph().createRun().setText("Patient: {{patientName}}");
+        d.getProperties().getCustomProperties().addProperty("BaseTemplate", "central");
+        d.getProperties().getCustomProperties().addProperty("RepeatAttribute", "items");
+        return bytes(d);
+    }
+
     @Test
     void processTemplate_withBaseTemplate_mergesBaseHeaderAndOriginalBody() throws Exception {
         when(pdfService.convertDocxToPdfBytesBlocking(any())).thenReturn("PDF".getBytes());
@@ -105,5 +114,27 @@ class DocxTemplateProcessorBaseTemplateTest {
             for (XWPFHeader h : rendered.getHeaderList()) header.append(h.getText());
             assertThat(header.toString()).contains("ORIGINAL HEADER");
         }
+    }
+
+    @Test
+    void processTemplate_withBaseTemplateAndRepeat_rendersEachItemAndMerges() throws Exception {
+        when(pdfService.convertDocxToPdfBytesBlocking(any())).thenReturn("PDF".getBytes());
+        when(pdfService.mergePdfBytesBlocking(anyList())).thenReturn("MERGED".getBytes());
+        BaseTemplateResolver resolver = (code, data) -> Optional.of(baseDocxUnchecked());
+
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("patientName", "X");
+        data.put("hospitalName", "RAMA");
+        data.put("items", java.util.List.of("a", "b", "c"));
+
+        byte[] result = processor(resolver)
+                .processTemplate(new ByteArrayInputStream(mainDocxRepeat()), data);
+
+        assertThat(result).isEqualTo("MERGED".getBytes());
+        verify(pdfService, times(3)).convertDocxToPdfBytesBlocking(any());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.List<byte[]>> cap = ArgumentCaptor.forClass(java.util.List.class);
+        verify(pdfService).mergePdfBytesBlocking(cap.capture());
+        assertThat(cap.getValue()).hasSize(3);
     }
 }

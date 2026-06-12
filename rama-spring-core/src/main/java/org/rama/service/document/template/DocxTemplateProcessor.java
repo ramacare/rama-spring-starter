@@ -95,23 +95,25 @@ public class DocxTemplateProcessor implements TemplateProcessor {
                     } catch (Exception e) {
                         log.warn("BaseTemplate '{}' resolution failed; rendering without base template", baseTemplateCode, e);
                     }
-                    if (baseStream != null && baseStream.isPresent()) {
-                        if (customProperties.contains(repeatAttributeProperty)
-                                && customProperties.getProperty(repeatAttributeProperty).isSetLpwstr()) {
-                            String repeatAttribute = customProperties.getProperty(repeatAttributeProperty).getLpwstr();
-                            Object value = (replacements != null) ? replacements.get(repeatAttribute) : null;
-                            if (value instanceof Collection<?> collection) {
-                                byte[] baseBytes = baseStream.get().readAllBytes();
-                                List<byte[]> pdfs = new ArrayList<>(collection.size());
-                                for (Object item : collection) {
-                                    replacements.put(repeatAttribute + "Item", item);
-                                    pdfs.add(processWithBaseTemplate(originalContent,
-                                            new ByteArrayInputStream(baseBytes), replacements, maximumPages));
+                    if (baseStream.isPresent()) {
+                        try (InputStream rawBase = baseStream.get()) {
+                            if (customProperties.contains(repeatAttributeProperty)
+                                    && customProperties.getProperty(repeatAttributeProperty).isSetLpwstr()) {
+                                String repeatAttribute = customProperties.getProperty(repeatAttributeProperty).getLpwstr();
+                                Object value = (replacements != null) ? replacements.get(repeatAttribute) : null;
+                                if (value instanceof Collection<?> collection) {
+                                    byte[] baseBytes = rawBase.readAllBytes();
+                                    List<byte[]> pdfs = new ArrayList<>(collection.size());
+                                    for (Object item : collection) {
+                                        replacements.put(repeatAttribute + "Item", item);
+                                        pdfs.add(processWithBaseTemplate(originalContent,
+                                                new ByteArrayInputStream(baseBytes), replacements, maximumPages));
+                                    }
+                                    return pdfService.mergePdfBytesBlocking(pdfs);
                                 }
-                                return pdfService.mergePdfBytesBlocking(pdfs);
                             }
+                            return processWithBaseTemplate(originalContent, rawBase, replacements, maximumPages);
                         }
-                        return processWithBaseTemplate(originalContent, baseStream.get(), replacements, maximumPages);
                     }
                     // not found -> fall through to existing normal processing
                 }
