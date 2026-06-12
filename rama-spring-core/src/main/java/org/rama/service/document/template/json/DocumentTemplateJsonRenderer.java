@@ -1,7 +1,5 @@
 package org.rama.service.document.template.json;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
@@ -15,6 +13,8 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -46,10 +46,11 @@ public class DocumentTemplateJsonRenderer {
     private static final int GRID_COLUMNS = 12;
 
     private final TemplateJsonResolver templateJsonResolver;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper;
 
-    public DocumentTemplateJsonRenderer(TemplateJsonResolver templateJsonResolver) {
+    public DocumentTemplateJsonRenderer(TemplateJsonResolver templateJsonResolver, JsonMapper objectMapper) {
         this.templateJsonResolver = templateJsonResolver;
+        this.objectMapper = objectMapper;
     }
 
     /**

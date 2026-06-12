@@ -522,8 +522,8 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    DocumentTemplateJsonRenderer documentTemplateJsonRenderer(TemplateJsonResolver templateJsonResolver) {
-        return new DocumentTemplateJsonRenderer(templateJsonResolver);
+    DocumentTemplateJsonRenderer documentTemplateJsonRenderer(TemplateJsonResolver templateJsonResolver, JsonMapper objectMapper) {
+        return new DocumentTemplateJsonRenderer(templateJsonResolver, objectMapper);
     }
 
     @Bean
