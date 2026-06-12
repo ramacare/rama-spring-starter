@@ -53,33 +53,35 @@ class HeaderFooterMergerTest {
 
     @Test
     void apply_graftsBaseHeaderAndFooter_keepsTargetBody_dropsTargetOwnHeader() throws Exception {
-        XWPFDocument target = doc("PATIENT BODY", "OLD ORIGINAL HEADER", "OLD ORIGINAL FOOTER");
-        XWPFDocument base = doc("BASE BODY (discarded)", "CENTRAL HEADER", "CENTRAL FOOTER");
+        try (XWPFDocument target = doc("PATIENT BODY", "OLD ORIGINAL HEADER", "OLD ORIGINAL FOOTER");
+             XWPFDocument base = doc("BASE BODY (discarded)", "CENTRAL HEADER", "CENTRAL FOOTER")) {
 
-        merger.apply(target, base);
-        XWPFDocument result = roundtrip(target);
-
-        assertThat(bodyText(result)).contains("PATIENT BODY");
-        assertThat(headerText(result)).contains("CENTRAL HEADER").doesNotContain("OLD ORIGINAL HEADER");
-        assertThat(footerText(result)).contains("CENTRAL FOOTER").doesNotContain("OLD ORIGINAL FOOTER");
+            merger.apply(target, base);
+            try (XWPFDocument result = roundtrip(target)) {
+                assertThat(bodyText(result)).contains("PATIENT BODY");
+                assertThat(headerText(result)).contains("CENTRAL HEADER").doesNotContain("OLD ORIGINAL HEADER");
+                assertThat(footerText(result)).contains("CENTRAL FOOTER").doesNotContain("OLD ORIGINAL FOOTER");
+            }
+        }
     }
 
     @Test
     void apply_copiesBasePageSizeAndMargins() throws Exception {
-        XWPFDocument target = doc("BODY", null, null);
-        XWPFDocument base = doc("BASE", "H", "F");
-        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr baseSect =
-                base.getDocument().getBody().isSetSectPr()
-                        ? base.getDocument().getBody().getSectPr()
-                        : base.getDocument().getBody().addNewSectPr();
-        baseSect.addNewPgSz().setW(java.math.BigInteger.valueOf(8391)); // A5 width in twips
+        try (XWPFDocument target = doc("BODY", null, null);
+             XWPFDocument base = doc("BASE", "H", "F")) {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr baseSect =
+                    base.getDocument().getBody().isSetSectPr()
+                            ? base.getDocument().getBody().getSectPr()
+                            : base.getDocument().getBody().addNewSectPr();
+            baseSect.addNewPgSz().setW(java.math.BigInteger.valueOf(8391)); // A5 width in twips
 
-        merger.apply(target, base);
-        XWPFDocument result = roundtrip(target);
-
-        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr resultSect =
-                result.getDocument().getBody().getSectPr();
-        assertThat(resultSect.getPgSz().getW()).isEqualTo(java.math.BigInteger.valueOf(8391));
+            merger.apply(target, base);
+            try (XWPFDocument result = roundtrip(target)) {
+                org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr resultSect =
+                        result.getDocument().getBody().getSectPr();
+                assertThat(resultSect.getPgSz().getW()).isEqualTo(java.math.BigInteger.valueOf(8391));
+            }
+        }
     }
 
     private static final byte[] PNG_1PX = java.util.Base64.getDecoder().decode(
@@ -87,22 +89,37 @@ class HeaderFooterMergerTest {
 
     @Test
     void apply_carriesHeaderImageBytesIntoTarget() throws Exception {
-        XWPFDocument target = doc("BODY", null, null);
-        XWPFDocument base = new XWPFDocument();
-        base.createParagraph().createRun().setText("BASE BODY");
-        XWPFHeader h = base.createHeaderFooterPolicy().createHeader(XWPFHeaderFooterPolicy.DEFAULT);
-        XWPFRun run = h.createParagraph().createRun();
-        run.addPicture(new java.io.ByteArrayInputStream(PNG_1PX), Document.PICTURE_TYPE_PNG,
-                "logo.png", 100, 100);
+        try (XWPFDocument target = doc("BODY", null, null);
+             XWPFDocument base = new XWPFDocument()) {
+            base.createParagraph().createRun().setText("BASE BODY");
+            XWPFHeader h = base.createHeaderFooterPolicy().createHeader(XWPFHeaderFooterPolicy.DEFAULT);
+            XWPFRun run = h.createParagraph().createRun();
+            run.addPicture(new java.io.ByteArrayInputStream(PNG_1PX), Document.PICTURE_TYPE_PNG,
+                    "logo.png", 100, 100);
 
-        merger.apply(target, base);
-        XWPFDocument result = roundtrip(target);
-
-        byte[] found = null;
-        for (XWPFHeader rh : result.getHeaderList()) {
-            for (XWPFPictureData pd : rh.getAllPictures()) found = pd.getData();
+            merger.apply(target, base);
+            try (XWPFDocument result = roundtrip(target)) {
+                byte[] found = null;
+                for (XWPFHeader rh : result.getHeaderList()) {
+                    for (XWPFPictureData pd : rh.getAllPictures()) found = pd.getData();
+                }
+                assertThat(found).isNotNull();
+                assertThat(found).isEqualTo(PNG_1PX);
+            }
         }
-        assertThat(found).isNotNull();
-        assertThat(found).isEqualTo(PNG_1PX);
+    }
+
+    @Test
+    void apply_whenBaseHasNoHeaderFooter_keepsTargetBody_addsNoHeaderFooter() throws Exception {
+        try (XWPFDocument target = doc("ONLY BODY", null, null);
+             XWPFDocument base = new XWPFDocument()) {          // no header/footer policy
+            base.createParagraph().createRun().setText("base body");
+            merger.apply(target, base);
+            try (XWPFDocument result = roundtrip(target)) {
+                assertThat(bodyText(result)).contains("ONLY BODY");
+                assertThat(result.getHeaderList()).isEmpty();
+                assertThat(result.getFooterList()).isEmpty();
+            }
+        }
     }
 }

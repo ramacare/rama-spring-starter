@@ -98,6 +98,7 @@ public class HeaderFooterMerger {
      * copied relationship ids point at picture parts that actually exist in the destination.
      */
     private void copyHeaderFooterPart(XWPFHeaderFooter src, XWPFHeaderFooter dst) throws Exception {
+        // copy() preserves the concrete XMLBeans type, so the cast is always safe
         CTHdrFtr xml = (CTHdrFtr) src._getHdrFtr().copy();
         rehomePictures(src, dst, xml);
         dst.setHeaderFooter(xml);
@@ -150,19 +151,19 @@ public class HeaderFooterMerger {
     private void rewriteRelationshipId(CTHdrFtr xml, String oldId, String newId) {
         try (XmlCursor cursor = xml.newCursor()) {
             while (cursor.hasNextToken()) {
-                if (cursor.isStart() || cursor.isAttr()) {
-                    XmlCursor attrs = cursor.newCursor();
-                    if (attrs.toFirstAttribute()) {
-                        do {
-                            javax.xml.namespace.QName name = attrs.getName();
-                            if (REL_NS.equals(name.getNamespaceURI())
-                                    && ("embed".equals(name.getLocalPart()) || "id".equals(name.getLocalPart()))
-                                    && oldId.equals(attrs.getTextValue())) {
-                                attrs.setTextValue(newId);
-                            }
-                        } while (attrs.toNextAttribute());
+                if (cursor.isStart()) {
+                    try (XmlCursor attrs = cursor.newCursor()) {
+                        if (attrs.toFirstAttribute()) {
+                            do {
+                                javax.xml.namespace.QName name = attrs.getName();
+                                if (REL_NS.equals(name.getNamespaceURI())
+                                        && ("embed".equals(name.getLocalPart()) || "id".equals(name.getLocalPart()))
+                                        && oldId.equals(attrs.getTextValue())) {
+                                    attrs.setTextValue(newId);
+                                }
+                            } while (attrs.toNextAttribute());
+                        }
                     }
-                    attrs.dispose();
                 }
                 cursor.toNextToken();
             }
