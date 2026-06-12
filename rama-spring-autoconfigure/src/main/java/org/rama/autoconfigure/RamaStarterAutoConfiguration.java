@@ -81,6 +81,8 @@ import org.rama.service.document.template.DocxTemplatePreprocessor;
 import org.rama.service.document.template.DocxTemplateProcessor;
 import org.rama.service.document.template.ReplacementProcessor;
 import org.rama.service.document.template.docx.ReplacePlaceholder;
+import org.rama.service.document.template.BaseTemplateResolver;
+import org.rama.service.document.template.docx.HeaderFooterMerger;
 import org.rama.service.document.template.docx.ReplaceSection;
 import org.rama.service.document.template.hooks.*;
 import org.rama.service.environment.EnvironmentService;
@@ -131,6 +133,7 @@ import java.time.Clock;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 
 @AutoConfiguration(beforeName = {
@@ -479,6 +482,18 @@ public class RamaStarterAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(BaseTemplateResolver.class)
+    BaseTemplateResolver baseTemplateResolver() {
+        return (templateCode, replacements) -> Optional.empty();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    HeaderFooterMerger headerFooterMerger() {
+        return new HeaderFooterMerger();
+    }
+
+    @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean({PdfService.class, ReplacementProcessor.class, BarcodeService.class, ReplacePlaceholder.class, ReplaceSection.class})
     DocxTemplateProcessor docxTemplateProcessor(
@@ -487,17 +502,22 @@ public class RamaStarterAutoConfiguration {
             PdfService pdfService,
             ReplacementProcessor replacementProcessor,
             ReplacePlaceholder replacePlaceholder,
-            ReplaceSection replaceSection
+            ReplaceSection replaceSection,
+            HeaderFooterMerger headerFooterMerger,
+            BaseTemplateResolver baseTemplateResolver
     ) {
         return new DocxTemplateProcessor(
                 documentProperties.getPlaceholderPattern(),
                 documentProperties.getRepeatAttributeProperty(),
                 documentProperties.getMaximumPagesProperty(),
+                documentProperties.getBaseTemplateProperty(),
                 barcodeService,
                 pdfService,
                 replacementProcessor,
                 replacePlaceholder,
-                replaceSection
+                replaceSection,
+                headerFooterMerger,
+                baseTemplateResolver
         );
     }
 
