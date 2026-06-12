@@ -82,6 +82,8 @@ import org.rama.service.document.template.DocxTemplateProcessor;
 import org.rama.service.document.template.ReplacementProcessor;
 import org.rama.service.document.template.docx.ReplacePlaceholder;
 import org.rama.service.document.template.docx.ReplaceSection;
+import org.rama.service.document.template.json.DocumentTemplateJsonRenderer;
+import org.rama.service.document.template.json.TemplateJsonResolver;
 import org.rama.service.document.template.hooks.*;
 import org.rama.service.environment.EnvironmentService;
 import org.rama.service.environment.StaticValueResolver;
@@ -506,6 +508,22 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(DocxTemplatePreprocessor.class)
     TemplatePreprocessor templatePreprocessor(DocxTemplatePreprocessor docxTemplatePreprocessor) {
         return new TemplatePreprocessor(docxTemplatePreprocessor);
+    }
+
+    /**
+     * No-op default. A consumer overrides this (backed by its template store) to enable
+     * nested {@code DocumentForm} rendering in {@link DocumentTemplateJsonRenderer}.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    TemplateJsonResolver templateJsonResolver() {
+        return code -> java.util.Optional.empty();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    DocumentTemplateJsonRenderer documentTemplateJsonRenderer(TemplateJsonResolver templateJsonResolver) {
+        return new DocumentTemplateJsonRenderer(templateJsonResolver);
     }
 
     @Bean
