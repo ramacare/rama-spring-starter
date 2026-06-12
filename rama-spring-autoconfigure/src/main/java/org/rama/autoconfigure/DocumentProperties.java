@@ -13,4 +13,5 @@ public class DocumentProperties {
     private String sectionItemPattern = "\\{\\{[\\s]*placeholder[^\\{\\}]*\\}\\}";
     private String repeatAttributeProperty = "RepeatAttribute";
     private String maximumPagesProperty = "MaximumPages";
+    private String baseTemplateProperty = "BaseTemplate";
 }
