@@ -24,8 +24,9 @@ public interface BaseTemplateResolver {
     /**
      * @param templateCode the value of the {@code BaseTemplate} custom property
      * @param replacements the print data map (for consumers that select a variant by data)
-     * @return the preprocessed base docx stream, or {@link Optional#empty()} if no template
-     *         is found for the code (the caller then renders the original template normally)
+     * @return the preprocessed base docx stream (the caller is responsible for closing it),
+     *         or {@link Optional#empty()} if no template is found for the code (the caller
+     *         then renders the original template normally)
      */
     Optional<InputStream> resolve(String templateCode, Map<String, Object> replacements);
 }
