@@ -13,10 +13,31 @@ import org.springframework.context.annotation.ClassPathScanningCandidateComponen
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MeilisearchIndexInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeilisearchIndexInitializer.class);
+
+    /**
+     * The starter's own root package.
+     *
+     * <p>{@code basePackages} is supplied from {@code AutoConfigurationPackages}, i.e. the
+     * <em>application's</em> package. The starter's own {@code @SyncToMeilisearch} entities
+     * (currently {@code org.rama.entity.master.MasterItem}) therefore fell outside the scan
+     * and their index settings were never applied.
+     *
+     * <p>The failure was silent and deferred: Meilisearch auto-creates an index with empty
+     * settings on the first document write, so syncing worked and only <em>filtered</em>
+     * queries blew up at runtime with "Attribute `groupKey` is not filterable. This index
+     * does not have configured filterable attributes." — breaking every master-data typeahead.
+     *
+     * <p>Scanning this package alongside the application's keeps starter-owned entities
+     * initialized no matter which application hosts them.
+     */
+    private static final String STARTER_BASE_PACKAGE = "org.rama";
 
     private final Client meilisearchClient;
     private final MeilisearchService meilisearchService;
@@ -33,11 +54,22 @@ public class MeilisearchIndexInitializer {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(SyncToMeilisearch.class));
 
-        for (String basePackage : basePackages) {
+        // An application may legitimately BE org.rama (or nest under it), so de-duplicate the
+        // packages, and de-duplicate the classes too — overlapping base packages would
+        // otherwise initialize the same index twice.
+        Set<String> packagesToScan = new LinkedHashSet<>(basePackages);
+        packagesToScan.add(STARTER_BASE_PACKAGE);
+
+        Set<String> initializedClassNames = new HashSet<>();
+        for (String basePackage : packagesToScan) {
             for (BeanDefinition beanDefinition : scanner.findCandidateComponents(basePackage + ".entity")) {
+                String className = beanDefinition.getBeanClassName();
+                if (className == null || !initializedClassNames.add(className)) {
+                    continue;
+                }
                 Class<?> clazz;
                 try {
-                    clazz = Class.forName(beanDefinition.getBeanClassName());
+                    clazz = Class.forName(className);
                 } catch (ClassNotFoundException ex) {
                     continue;
                 }
