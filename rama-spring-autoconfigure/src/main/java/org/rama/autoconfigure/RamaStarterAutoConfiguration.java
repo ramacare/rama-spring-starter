@@ -112,8 +112,10 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.convert.ConversionService;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.convert.MongoConverter;
 import org.springframework.boot.graphql.autoconfigure.GraphQlSourceBuilderCustomizer;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
@@ -609,21 +611,35 @@ public class RamaStarterAutoConfiguration {
         return new GlobalAuditablePreUpdateListener(environmentService);
     }
 
+    // Both mongo templates below take MongoDatabaseFactory + MongoConverter rather than the
+    // MongoTemplate bean: once ramaStarterIndexAwareMongoTemplate is @Primary, injecting
+    // MongoTemplate here would resolve to the tracking template itself and create a cycle
+    // (manager -> template -> manager). See starter#34.
     @Bean
     @ConditionalOnClass(MongoTemplate.class)
     @ConditionalOnBean(MongoDatabaseFactory.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.mongo", name = "enabled", havingValue = "true", matchIfMissing = true)
-    DeferredIndexManager deferredIndexManager(MongoTemplate mongoTemplate) {
-        return new DeferredIndexManager(mongoTemplate);
+    DeferredIndexManager deferredIndexManager(MongoDatabaseFactory mongoDatabaseFactory, MongoConverter mongoConverter, RamaStarterProperties properties) {
+        return new DeferredIndexManager(
+                new MongoTemplate(mongoDatabaseFactory, mongoConverter),
+                properties.getMongo().getDeferredIndexThreshold(),
+                properties.getMongo().getDeferredIndexFlushInterval().toMillis());
     }
 
+    /**
+     * Primary so that everything querying Mongo -- {@link GenericMongoService}, {@link MongoSyncService},
+     * consumer code -- goes through the tracking template. Registered as a plain additional bean it was
+     * never injected anywhere (parameter-name resolution picked Boot's {@code mongoTemplate}), so the
+     * deferred-index feature tracked nothing. See starter#34.
+     */
     @Bean
+    @Primary
     @ConditionalOnBean({MongoDatabaseFactory.class, DeferredIndexManager.class})
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.mongo", name = "deferred-indexes-enabled", havingValue = "true", matchIfMissing = true)
-    IndexAwareMongoTemplate ramaStarterIndexAwareMongoTemplate(MongoTemplate mongoTemplate, DeferredIndexManager deferredIndexManager) {
-        return new IndexAwareMongoTemplate(mongoTemplate.getMongoDatabaseFactory(), mongoTemplate.getConverter(), deferredIndexManager);
+    IndexAwareMongoTemplate ramaStarterIndexAwareMongoTemplate(MongoDatabaseFactory mongoDatabaseFactory, MongoConverter mongoConverter, DeferredIndexManager deferredIndexManager) {
+        return new IndexAwareMongoTemplate(mongoDatabaseFactory, mongoConverter, deferredIndexManager);
     }
 
     @Bean

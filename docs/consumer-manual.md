@@ -86,6 +86,8 @@ rama:
   mongo:
     enabled: false                   # Enable MongoDB sync
     deferred-indexes-enabled: true   # Auto-create indexes on usage patterns
+    deferred-index-threshold: 100    # Cumulative uses of a field-set before its index is created
+    deferred-index-flush-interval: 10m  # How often accumulated usage is examined (0 disables the flush)
   meilisearch:
     enabled: false                   # Enable Meilisearch sync
     initialize-indexes: true         # Create indexes on startup
