@@ -67,6 +67,15 @@ public class GenericEntityService {
         return Optional.of(entity);
     }
 
+    /*
+     * The entityIdKey overloads below delegate to the ID-taking method on `this`, which bypasses
+     * the CGLIB proxy -- so @Transactional on the target has no effect and each repository call
+     * runs in its own transaction. createEntity then saves in one transaction and refreshes in
+     * another, against a detached entity ("Given entity is not associated with the persistence
+     * context"), which broke every create mutation in an application with open-in-view disabled.
+     * Annotating the entry point itself puts the whole delegation in one transaction. See starter#36.
+     */
+    @Transactional
     public <T, ID extends Serializable> Optional<T> createEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return createEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey, true), entityInput);
     }
@@ -125,30 +134,37 @@ public class GenericEntityService {
         return Optional.ofNullable(updatedEntity);
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> updateEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return updateEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey), entityInput);
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> softDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return softDeleteEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey));
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> softDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId) {
         return deleteEntity(entityClass, entityRepository, entityId, "statusCode", StatusCode.terminated);
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> hardDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey) {
         return hardDeleteEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey));
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> hardDeleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId) {
         return deleteEntity(entityClass, entityRepository, entityId, null, null);
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> deleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, Map<String, Object> entityInput, String entityIdKey, String statusCodeField, Object deleteValue) {
         return deleteEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey), statusCodeField, deleteValue);
     }
 
+    @Transactional
     public <T, ID extends Serializable> Optional<T> deleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, String statusCodeField, Object deleteValue) {
         Optional<T> entityOptional = entityRepository.findById(entityId);
 

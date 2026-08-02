@@ -1,0 +1,44 @@
+extend type Query {
+    userConfig: UserConfig
+    userConfigByUsername(username: String!): UserConfig
+    userConfigPageable(pageable: PageableInput!): UserConfigPage
+    userConfigByExamplePageable(example: UserConfigExample, pageable: PageableInput!): UserConfigPage
+}
+
+extend type Mutation {
+    createUserConfig(input: UserConfigInput!): UserConfig
+    updateUserConfig(input: UserConfigUpdate!): UserConfig
+    deleteUserConfig(input: UserConfigUpdate!): UserConfig
+}
+
+type UserConfig {
+    id: ID!
+    username: String!
+    configuration: JSON
+    lastSeenDatetime: DateTime
+    userstampField: UserstampField
+    timestampField: TimestampField
+}
+
+input UserConfigInput {
+    username: String!
+    configuration: JSON
+}
+
+input UserConfigUpdate {
+    id: ID!
+    username: String!
+    configuration: JSON
+    lastSeenDatetime: DateTime
+    timestampField: TimestampFieldInput
+}
+
+input UserConfigExample {
+    id: ID
+    username: String
+}
+
+type UserConfigPage {
+    meta: PageableMeta,
+    data: [UserConfig]
+}

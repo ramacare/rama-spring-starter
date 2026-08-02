@@ -23,7 +23,7 @@ rama-spring-starter-parent (pom)
 - `entity.api` -- `Api`, `ApiHeaderSet`
 - `entity.asset` -- `AssetFile`
 - `entity.master` -- `MasterGroup`, `MasterId`, `MasterItem`
-- `entity.system` -- `SystemLog`, `SystemParameter`, `SystemTemplate`, `ClientConfig`
+- `entity.system` -- `SystemLog`, `SystemParameter`, `SystemTemplate`, `ClientConfig`, `ClientUserConfig`, `UserConfig`
 
 ### Repositories
 - `repository` -- `BaseRepository<T,ID>`, `BaseRepositoryImpl`, `SoftDeleteRepository`
@@ -31,12 +31,12 @@ rama-spring-starter-parent (pom)
 - `repository.asset` -- `AssetFileRepository`
 - `repository.master` -- `MasterGroupRepository`, `MasterIdRepository`, `MasterItemRepository`
 - `repository.revision` -- `RevisionRepository`
-- `repository.system` -- `SystemLogRepository`, `SystemParameterRepository`, `SystemTemplateRepository`, `ClientConfigRepository`
+- `repository.system` -- `SystemLogRepository`, `SystemParameterRepository`, `SystemTemplateRepository`, `ClientConfigRepository`, `ClientUserConfigRepository`, `UserConfigRepository`
 
 ### Services
 - `service` -- `GenericEntityService`, `GenericApiService`, `GenericMongoService`, `StorageService`, `StorageProvider`, `VaultService`, `RevisionService`
 - `service.master` -- `MasterIdService`, `MasterItemService`
-- `service.system` -- `QuartzService`, `SystemLogService`, `SystemParameterService`, `ClientConfigService`
+- `service.system` -- `QuartzService`, `SystemLogService`, `SystemParameterService`, `ClientConfigService`, `ClientUserConfigService`, `UserConfigService`
 - `service.environment` -- `EnvironmentService`, `StaticValueService`, `StaticValueResolver`
 
 ### Document Processing
@@ -52,7 +52,7 @@ rama-spring-starter-parent (pom)
 - `controller.api` -- `ApiController`, `ApiHeaderSetController`
 - `controller.asset` -- `AssetFileController`
 - `controller.master` -- `MasterGroupController`, `MasterIdController`, `MasterItemController`
-- `controller.system` -- `ClientConfigController`, `SchedulerController`, `SystemLogController`, `SystemParameterController`, `SystemTemplateController`
+- `controller.system` -- `ClientConfigController`, `ClientUserConfigController`, `UserConfigController`, `SchedulerController`, `SystemLogController`, `SystemParameterController`, `SystemTemplateController`
 - `controller` -- `RevisionController`
 
 ### Listeners
