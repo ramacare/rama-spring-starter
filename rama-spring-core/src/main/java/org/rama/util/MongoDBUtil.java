@@ -110,6 +110,9 @@ public final class MongoDBUtil {
 
     public static List<Map<String, Object>> withoutTerminated(List<Map<String, Object>> criteriaListInput, String statusCodeField, Object terminatedValue) {
         List<Map<String, Object>> result = new ArrayList<>(criteriaListInput);
+        // "!=" is raw $ne, which also matches documents missing statusCode — correct here: a
+        // document with no statusCode is not soft-deletable and must still be returned. (Use the
+        // "neexists" operator when you instead want "present and not equal".)
         result.add(Map.of("key", statusCodeField, "value", terminatedValue, "operator", "!="));
         return result;
     }
@@ -125,6 +128,10 @@ public final class MongoDBUtil {
         return switch (operator) {
             case "=" -> Criteria.where(key).gte(startDate).lte(endDate);
             case "!=" -> new Criteria().norOperator(Criteria.where(key).gte(startDate).lte(endDate));
+            // "present and not equal" for a date: field must exist AND not fall on that day.
+            case "neexists" -> new Criteria().andOperator(
+                    Criteria.where(key).exists(true),
+                    new Criteria().norOperator(Criteria.where(key).gte(startDate).lte(endDate)));
             case ">" -> Criteria.where(key).gt(endDate);
             case ">=" -> Criteria.where(key).gte(startDate);
             case "<" -> Criteria.where(key).lt(startDate);
@@ -137,6 +144,10 @@ public final class MongoDBUtil {
         return switch (operator) {
             case "=" -> Criteria.where(key).is(value);
             case "!=" -> Criteria.where(key).ne(value);
+            // "neexists" = present and not equal. Unlike "!=" (raw $ne, which also matches documents
+            // missing the field), this requires the field to exist (#37). The operator is lowercased
+            // before matching, so callers may send "neExists".
+            case "neexists" -> Criteria.where(key).ne(value).exists(true);
             case ">" -> Criteria.where(key).gt(value);
             case ">=" -> Criteria.where(key).gte(value);
             case "<" -> Criteria.where(key).lt(value);
