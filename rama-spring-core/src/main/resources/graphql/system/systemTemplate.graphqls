@@ -14,6 +14,8 @@ extend type Mutation {
 
 type SystemTemplate {
     id: ID!
+    templateCode: String
+    templateName: String
     template: String
     templateScript: String
     statusCode: String!
@@ -28,6 +30,8 @@ type SystemTemplatePage {
 
 input SystemTemplateInput {
     id: ID
+    templateCode: String
+    templateName: String
     template: String
     templateScript: String
     statusCode: String = "active"
@@ -35,6 +39,8 @@ input SystemTemplateInput {
 
 input SystemTemplateUpdate {
     id: ID!
+    templateCode: String
+    templateName: String
     template: String
     templateScript: String
     statusCode: String = "active"
