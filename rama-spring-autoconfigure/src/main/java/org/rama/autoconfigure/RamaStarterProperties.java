@@ -43,6 +43,10 @@ public class RamaStarterProperties {
     public static class Mongo {
         private boolean enabled = true;
         private boolean deferredIndexesEnabled = true;
+        /** Times a field-set must be queried -- cumulatively, not per window -- before its index is created. */
+        private int deferredIndexThreshold = 100;
+        /** How often accumulated usage is examined and qualifying indexes are created. */
+        private Duration deferredIndexFlushInterval = Duration.ofMinutes(10);
     }
 
     @Data

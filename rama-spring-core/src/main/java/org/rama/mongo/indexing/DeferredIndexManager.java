@@ -1,5 +1,6 @@
 package org.rama.mongo.indexing;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -7,22 +8,62 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.core.index.IndexField;
 import org.springframework.data.mongodb.core.index.IndexInfo;
-import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
 public class DeferredIndexManager {
-    private static final int INDEX_TRIGGER_THRESHOLD = 100;
+    public static final int DEFAULT_INDEX_TRIGGER_THRESHOLD = 100;
+    public static final long DEFAULT_FLUSH_INTERVAL_MS = 10 * 60 * 1000L;
 
     private final Map<String, Set<LinkedHashMap<String, Sort.Direction>>> indexPools = new ConcurrentHashMap<>();
     private final Map<String, ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer>> fieldUsageMap = new ConcurrentHashMap<>();
     private final MongoTemplate mongoTemplate;
+    private final int indexTriggerThreshold;
+    private final long flushIntervalMs;
+
+    private ScheduledExecutorService scheduler;
 
     public DeferredIndexManager(MongoTemplate mongoTemplate) {
+        this(mongoTemplate, DEFAULT_INDEX_TRIGGER_THRESHOLD, DEFAULT_FLUSH_INTERVAL_MS);
+    }
+
+    public DeferredIndexManager(MongoTemplate mongoTemplate, int indexTriggerThreshold, long flushIntervalMs) {
         this.mongoTemplate = mongoTemplate;
+        this.indexTriggerThreshold = indexTriggerThreshold;
+        this.flushIntervalMs = flushIntervalMs;
+    }
+
+    /**
+     * The flush is scheduled on a thread this bean owns rather than via {@code @Scheduled},
+     * which would only fire if the consuming application happened to declare
+     * {@code @EnableScheduling} -- the starter itself only enables async. See starter#34.
+     */
+    @PostConstruct
+    void startScheduler() {
+        if (flushIntervalMs <= 0) {
+            log.info("Deferred Mongo index flush disabled (interval {} ms)", flushIntervalMs);
+            return;
+        }
+        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "rama-deferred-index");
+            thread.setDaemon(true);
+            return thread;
+        });
+        scheduler.scheduleWithFixedDelay(this::flushQuietly, flushIntervalMs, flushIntervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    @PreDestroy
+    void stopScheduler() {
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+        }
+        flushQuietly();
     }
 
     public void trackFields(String collectionName, LinkedHashMap<String, Sort.Direction> fields) {
@@ -33,25 +74,47 @@ public class DeferredIndexManager {
         fieldUsageMap.computeIfAbsent(collectionName, key -> new ConcurrentHashMap<>()).merge(fields, 1, Integer::sum);
     }
 
-    @PreDestroy
-    @Scheduled(fixedDelay = 10 * 60 * 1000)
+    private void flushQuietly() {
+        try {
+            autoFlushIndexes();
+        } catch (RuntimeException ex) {
+            // A transient Mongo outage must not kill the scheduler: scheduleWithFixedDelay
+            // cancels all further runs once the task throws.
+            log.warn("Deferred Mongo index flush failed; will retry on the next interval", ex);
+        }
+    }
+
+    /**
+     * Usage counts <em>accumulate</em> across flushes. Only counters that have been acted on --
+     * index created, or found already present -- are dropped. Clearing every counter each run
+     * meant a field-set queried steadily but below the threshold within a single window never
+     * reached it, however long the application ran. See starter#34.
+     */
     public void autoFlushIndexes() {
-        Map<String, ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer>> snapshot = new HashMap<>(fieldUsageMap);
-        fieldUsageMap.clear();
-
-        for (Map.Entry<String, ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer>> collectionEntry : snapshot.entrySet()) {
+        for (Map.Entry<String, ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer>> collectionEntry : fieldUsageMap.entrySet()) {
             String collection = collectionEntry.getKey();
-            Map<LinkedHashMap<String, Sort.Direction>, Integer> fieldCounts = collectionEntry.getValue();
-            List<IndexInfo> existingIndexes = mongoTemplate.indexOps(collection).getIndexInfo();
+            ConcurrentHashMap<LinkedHashMap<String, Sort.Direction>, Integer> fieldCounts = collectionEntry.getValue();
+            if (fieldCounts.isEmpty()) {
+                continue;
+            }
 
+            List<IndexInfo> existingIndexes = null;
             for (Map.Entry<LinkedHashMap<String, Sort.Direction>, Integer> entry : fieldCounts.entrySet()) {
+                if (entry.getValue() < indexTriggerThreshold) {
+                    continue;
+                }
+                if (existingIndexes == null) {
+                    existingIndexes = mongoTemplate.indexOps(collection).getIndexInfo();
+                }
                 LinkedHashMap<String, Sort.Direction> fields = entry.getKey();
-                if (entry.getValue() >= INDEX_TRIGGER_THRESHOLD && indexNotExists(existingIndexes, fields)) {
+                if (indexNotExists(existingIndexes, fields)) {
                     Index index = new Index().named(buildIndexName(fields));
                     fields.forEach(index::on);
                     mongoTemplate.indexOps(collection).createIndex(index);
-                    indexPools.getOrDefault(collection, Collections.emptySet()).remove(fields);
+                    log.info("Created deferred Mongo index {} on {} after {} uses", index.getIndexKeys().keySet(), collection, entry.getValue());
                 }
+                fieldCounts.remove(fields);
+                indexPools.getOrDefault(collection, Collections.emptySet()).remove(fields);
             }
         }
     }
@@ -77,6 +140,7 @@ public class DeferredIndexManager {
             }
         }
         indexPools.remove(collectionName);
+        fieldUsageMap.remove(collectionName);
     }
 
     private boolean indexNotExists(List<IndexInfo> existingIndexes, LinkedHashMap<String, Sort.Direction> targetFields) {

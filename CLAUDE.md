@@ -76,7 +76,9 @@ Most beans are registered with `@ConditionalOnMissingBean`. Consumer application
 - `rama.static-values.enabled` -- Static value resolver
 - `rama.revision.enabled` -- Revision/audit trail
 - `rama.mongo.enabled` -- MongoDB sync
-- `rama.mongo.deferred-indexes-enabled` -- MongoDB deferred index creation
+- `rama.mongo.deferred-indexes-enabled` -- MongoDB deferred index creation. When on, `IndexAwareMongoTemplate` is registered `@Primary` so all Mongo access is tracked; `DeferredIndexManager` runs its own flush thread (no consumer `@EnableScheduling` needed)
+- `rama.mongo.deferred-index-threshold` -- Cumulative uses of a field-set before its index is created (default `100`)
+- `rama.mongo.deferred-index-flush-interval` -- How often accumulated usage is examined (default `10m`; `0` disables the flush)
 - `rama.meilisearch.enabled` -- Meilisearch sync
 - `rama.meilisearch.initialize-indexes` -- Meilisearch index auto-initialization
 - `rama.graphql.enabled` -- GraphQL scalars and directives
