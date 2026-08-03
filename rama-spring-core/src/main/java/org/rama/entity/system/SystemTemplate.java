@@ -16,6 +16,8 @@ public class SystemTemplate implements Auditable {
     private String id;
     private String template;
     private String templateScript;
+    private String templateCode;
+    private String templateName;
 
     @Enumerated(EnumType.STRING)
     private StatusCode statusCode = StatusCode.active;

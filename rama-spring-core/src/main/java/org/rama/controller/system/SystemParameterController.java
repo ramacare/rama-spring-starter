@@ -30,6 +30,12 @@ public class SystemParameterController {
         return genericEntityService.updateEntity(SystemParameter.class, systemParameterRepository, input,"parameterKey");
     }
 
+    @MutationMapping(name = "deleteSystemParameter")
+    public Optional<SystemParameter> deleteEntity(@Argument Map<String, Object> input) {
+        return genericEntityService.hardDeleteEntity(
+                SystemParameter.class, systemParameterRepository, input, "parameterKey");
+    }
+
     @QueryMapping
     public PageableDTO<SystemParameter> systemParameterPageable(@Argument PageableInput pageable) {
         return GenericEntityService.findEntityPageable(systemParameterRepository,pageable);
