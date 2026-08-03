@@ -7,6 +7,7 @@ extend type Query {
 extend type Mutation {
     createSystemParameter(input: SystemParameterInput!): SystemParameter
     updateSystemParameter(input: SystemParameterInput!): SystemParameter
+    deleteSystemParameter(input: SystemParameterInput!): SystemParameter
 }
 
 input SystemParameterInput {
