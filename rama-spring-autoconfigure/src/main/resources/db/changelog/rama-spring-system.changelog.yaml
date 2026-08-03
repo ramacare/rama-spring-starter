@@ -346,3 +346,32 @@ databaseChangeLog:
         - column:
             name: revision_datetime
             descending: true
+- changeSet:
+    id: rama-spring-system-008-system-template-code-name
+    author: claude
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: system_template
+    - not:
+        columnExists:
+          tableName: system_template
+          columnName: template_code
+    changes:
+    - addColumn:
+        tableName: system_template
+        columns:
+        - column:
+            name: template_code
+            type: VARCHAR(255)
+        - column:
+            name: template_name
+            type: VARCHAR(255)
+    - createIndex:
+        tableName: system_template
+        indexName: ix_system_template__template_code
+        columns:
+        - column:
+            name: template_code
