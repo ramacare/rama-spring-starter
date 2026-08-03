@@ -110,7 +110,10 @@ public final class MongoDBUtil {
 
     public static List<Map<String, Object>> withoutTerminated(List<Map<String, Object>> criteriaListInput, String statusCodeField, Object terminatedValue) {
         List<Map<String, Object>> result = new ArrayList<>(criteriaListInput);
-        result.add(Map.of("key", statusCodeField, "value", terminatedValue, "operator", "!="));
+        // Use "nin" (not "!="): a document without a statusCode field is not soft-deletable, so it
+        // must still be returned. Mongo's $nin matches documents missing the field, whereas "!=" now
+        // requires the field to be present (#37).
+        result.add(Map.of("key", statusCodeField, "value", terminatedValue, "operator", "nin"));
         return result;
     }
 
@@ -136,7 +139,10 @@ public final class MongoDBUtil {
     private static Criteria buildCriteria(String key, Object value, String operator) {
         return switch (operator) {
             case "=" -> Criteria.where(key).is(value);
-            case "!=" -> Criteria.where(key).ne(value);
+            // "!=" means "present and not equal". Mongo's raw $ne also matches documents that omit
+            // the field entirely; requiring $exists:true makes the operator behave the way
+            // SQL-minded callers expect (#37). Use "nin" for the raw-$ne (also-matches-missing) semantics.
+            case "!=" -> Criteria.where(key).ne(value).exists(true);
             case ">" -> Criteria.where(key).gt(value);
             case ">=" -> Criteria.where(key).gte(value);
             case "<" -> Criteria.where(key).lt(value);
