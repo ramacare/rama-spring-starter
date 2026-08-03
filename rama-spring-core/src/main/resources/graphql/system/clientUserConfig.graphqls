@@ -1,0 +1,44 @@
+extend type Query {
+    clientUserConfig: [ClientUserConfig]
+    clientUserConfigPageable(pageable: PageableInput!): ClientUserConfigPage
+    clientUserConfigByExamplePageable(example: ClientUserConfigExample, pageable: PageableInput!): ClientUserConfigPage
+    clientUserConfigByClientUsername(clientUsername: String!): ClientUserConfig
+}
+
+extend type Mutation {
+    createClientUserConfig(input: ClientUserConfigInput!): ClientUserConfig
+    updateClientUserConfig(input: ClientUserConfigUpdate!): ClientUserConfig
+    deleteClientUserConfig(input: ClientUserConfigUpdate!): ClientUserConfig
+}
+
+type ClientUserConfig {
+    id: ID!
+    clientUsername: String!
+    configuration: JSON
+    lastSeenDatetime: DateTime
+    userstampField: UserstampField
+    timestampField: TimestampField
+}
+
+input ClientUserConfigInput {
+    clientUsername: String!
+    configuration: JSON
+}
+
+input ClientUserConfigUpdate {
+    id: ID!
+    clientUsername: String!
+    configuration: JSON
+    lastSeenDatetime: DateTime
+    timestampField: TimestampFieldInput
+}
+
+input ClientUserConfigExample {
+    id: ID
+    clientUsername: String
+}
+
+type ClientUserConfigPage {
+    meta: PageableMeta,
+    data: [ClientUserConfig]
+}

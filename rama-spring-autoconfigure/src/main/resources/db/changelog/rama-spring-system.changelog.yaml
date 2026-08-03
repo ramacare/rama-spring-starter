@@ -346,3 +346,105 @@ databaseChangeLog:
         - column:
             name: revision_datetime
             descending: true
+- changeSet:
+    id: rama-spring-system-008-client-user-config
+    author: claude
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: client_user_config
+    changes:
+    - createTable:
+        tableName: client_user_config
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: client_username
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: configuration
+            type: ${clobType}
+        - column:
+            name: last_seen_datetime
+            type: ${timestampType}
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: client_user_config
+        indexName: ux_client_user_config__client_username
+        unique: true
+        columns:
+        - column:
+            name: client_username
+- changeSet:
+    id: rama-spring-system-009-user-config
+    author: claude
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - not:
+        tableExists:
+          tableName: user_config
+    changes:
+    - createTable:
+        tableName: user_config
+        columns:
+        - column:
+            name: id
+            type: BIGINT
+            autoIncrement: true
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: username
+            type: VARCHAR(255)
+            constraints:
+              nullable: false
+        - column:
+            name: configuration
+            type: ${clobType}
+        - column:
+            name: last_seen_datetime
+            type: ${timestampType}
+        - column:
+            name: created_by
+            type: VARCHAR(200)
+        - column:
+            name: updated_by
+            type: VARCHAR(200)
+        - column:
+            name: created_at
+            type: ${timestampType}
+        - column:
+            name: updated_at
+            type: ${timestampType}
+    - createIndex:
+        tableName: user_config
+        indexName: ux_user_config__username
+        unique: true
+        columns:
+        - column:
+            name: username

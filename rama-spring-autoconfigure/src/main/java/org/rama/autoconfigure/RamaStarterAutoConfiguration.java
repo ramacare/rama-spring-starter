@@ -64,6 +64,8 @@ import org.rama.repository.master.MasterIdRepository;
 import org.rama.repository.master.MasterItemRepository;
 import org.rama.repository.revision.RevisionRepository;
 import org.rama.repository.system.ClientConfigRepository;
+import org.rama.repository.system.ClientUserConfigRepository;
+import org.rama.repository.system.UserConfigRepository;
 import org.rama.repository.system.SystemLogRepository;
 import org.rama.repository.system.SystemParameterRepository;
 import org.rama.service.*;
@@ -89,6 +91,8 @@ import org.rama.service.environment.StaticValueService;
 import org.rama.service.master.MasterIdService;
 import org.rama.service.master.MasterItemService;
 import org.rama.service.system.ClientConfigService;
+import org.rama.service.system.ClientUserConfigService;
+import org.rama.service.system.UserConfigService;
 import org.rama.service.system.QuartzService;
 import org.rama.service.system.SystemLogService;
 import org.rama.service.system.SystemParameterService;
@@ -329,6 +333,20 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean({ClientConfigRepository.class, SystemLogRepository.class})
     ClientConfigService clientConfigService(ClientConfigRepository clientConfigRepository, SystemLogRepository systemLogRepository) {
         return new ClientConfigService(clientConfigRepository, systemLogRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(ClientUserConfigRepository.class)
+    ClientUserConfigService clientUserConfigService(ClientUserConfigRepository clientUserConfigRepository) {
+        return new ClientUserConfigService(clientUserConfigRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(UserConfigRepository.class)
+    UserConfigService userConfigService(UserConfigRepository userConfigRepository, EnvironmentService environmentService) {
+        return new UserConfigService(userConfigRepository, environmentService);
     }
 
     @Bean
