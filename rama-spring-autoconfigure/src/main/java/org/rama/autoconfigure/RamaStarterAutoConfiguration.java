@@ -121,6 +121,7 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.convert.MongoConverter;
 import org.springframework.boot.graphql.autoconfigure.GraphQlSourceBuilderCustomizer;
+import org.springframework.boot.jackson.autoconfigure.JacksonProperties;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
@@ -166,10 +167,18 @@ public class RamaStarterAutoConfiguration {
     static class RamaStarterJpaConfiguration {
     }
 
+    /**
+     * This mapper is built directly rather than through Boot's
+     * {@link JsonMapperBuilderCustomizer} chain, so {@code spring.jackson.time-zone}
+     * would otherwise be read and then silently ignored. Honour it here, falling back
+     * to the JVM zone. See starter#39.
+     */
     @Bean
     @ConditionalOnMissingBean
-    ObjectMapper ramaStarterObjectMapper() {
-        return org.rama.entity.JsonConverter.createObjectMapper();
+    ObjectMapper ramaStarterObjectMapper(ObjectProvider<JacksonProperties> jacksonProperties) {
+        JacksonProperties properties = jacksonProperties.getIfAvailable();
+        return org.rama.entity.JsonConverter.createObjectMapper(
+                properties != null ? properties.getTimeZone() : null);
     }
 
     /**
@@ -185,6 +194,29 @@ public class RamaStarterAutoConfiguration {
     JsonMapperBuilderCustomizer ramaStarterCoercionCustomizer() {
         return builder -> builder.withCoercionConfigDefaults(cfg ->
                 cfg.setCoercion(CoercionInputShape.String, CoercionAction.TryConvert));
+    }
+
+    /**
+     * Frame Boot's managed {@link JsonMapper} in the JVM zone, matching
+     * {@link org.rama.entity.JsonConverter} and the rest of the starter's datetime
+     * handling. This is the mapper injected into {@code GenericEntityService},
+     * {@code GenericApiService}, {@code SystemLogService} and the Meilisearch mapper,
+     * so without it every GraphQL mutation input re-frames {@code +07:00} to {@code Z}
+     * for the duration of the request — long enough for {@code @PrePersist} listeners
+     * and validators to read the wrong wall clock. See starter#39.
+     *
+     * <p>Backs off when the consumer has set {@code spring.jackson.time-zone}, which
+     * Boot's own customizer already applies.
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "ramaStarterTimeZoneCustomizer")
+    JsonMapperBuilderCustomizer ramaStarterTimeZoneCustomizer(ObjectProvider<JacksonProperties> jacksonProperties) {
+        return builder -> {
+            JacksonProperties properties = jacksonProperties.getIfAvailable();
+            if (properties == null || properties.getTimeZone() == null) {
+                builder.defaultTimeZone(java.util.TimeZone.getDefault());
+            }
+        };
     }
 
     @Bean

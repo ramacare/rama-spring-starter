@@ -359,6 +359,38 @@ private String sensitiveField;
 private Map<String, Object> encryptedJson;
 ```
 
+### Date/Time Frame
+
+Jackson's own default context zone is UTC, so an unconfigured mapper re-frames every
+incoming `+07:00` value to `Z`. The instant is preserved, but `toLocalDate()` and
+`getHour()` then disagree with the caller — and for anything before 07:00 local, so does
+the calendar date.
+
+The starter frames both mappers in the JVM's default zone instead, matching
+`OffsetDateTimeConverter`, `DateTimeUtil`, `QueryUtil` and `MongoDBUtil`:
+
+- `ramaStarterObjectMapper` (and the static mapper inside `JsonConverter`)
+- Spring Boot's managed `JsonMapper` — the one injected into `GenericEntityService`,
+  `GenericApiService`, `SystemLogService` and `DefaultMeilisearchMapper`
+
+Pin the zone explicitly in your container so the JVM, the mappers and the database agree:
+
+```dockerfile
+ENV TZ=Asia/Bangkok
+```
+
+To frame Jackson somewhere other than the JVM zone, set the standard Spring property —
+the starter backs off when it is present:
+
+```properties
+spring.jackson.time-zone=Asia/Bangkok
+```
+
+> **Upgrading from 4.3.1 or earlier.** Both mappers previously produced `Z`. Code that
+> compensated by normalizing to the system zone (`atZoneSameInstant(ZoneId.systemDefault())`)
+> is unaffected — that is idempotent once the mapper is correct. Code that added a fixed
+> offset to undo the shift will now double-correct and must drop the compensation.
+
 ## 7. Liquibase Migrations
 
 The starter ships its changelog files inside the JAR. **You must `<include>` them in your app's master changelog** — the standard Spring Boot way — and point `spring.liquibase.change-log` at that master.
