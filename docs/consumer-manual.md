@@ -1,5 +1,29 @@
 # Consumer Integration Guide
 
+## Upgrading
+
+Behaviour changes that need action when you bump the starter. Anything not listed here is
+additive.
+
+### Upgrading past 4.3.1 — Jackson datetimes are framed in the JVM time zone
+
+The starter's mappers previously left Jackson at its built-in UTC default. They now use the
+JVM's zone. Two things change; the instant is preserved in both.
+
+- **Deserialization** — a payload sent as `+07:00` used to materialize as `Z`, shifting the
+  wall clock and, before 07:00 local, the calendar date. It now keeps the local frame. **If
+  your code compensated for the old behaviour with a fixed offset, drop that compensation —
+  it will now double-correct.** Compensation via `atZoneSameInstant(ZoneId.systemDefault())`
+  is safe and needs no change.
+- **Serialization** — `OffsetDateTime` used to be written with whatever offset the value
+  carried; it is now normalized to the JVM zone. On a deployment pinned to
+  `TZ=Asia/Bangkok` this is a no-op. **Tests asserting a literal offset in serialized JSON
+  will fail on a CI runner in another zone** — assert on the instant instead.
+
+Also worth knowing: `spring.jackson.time-zone` used to be silently ignored by the starter
+and now works, and overriding the `ObjectMapper` bean never replaced the mapper the starter's
+services use — override `JsonMapper`. See [Date/Time Frame](#datetime-frame) for the detail.
+
 ## 1. Add the Dependency
 
 ```xml
