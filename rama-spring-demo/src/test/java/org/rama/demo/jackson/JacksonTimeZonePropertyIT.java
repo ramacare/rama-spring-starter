@@ -30,8 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class JacksonTimeZonePropertyIT {
 
     /**
-     * Deliberately not Asia/Bangkok: CI and dev machines run with {@code TZ=Asia/Bangkok},
-     * so asserting on that zone would pass even if the property were ignored entirely.
+     * Deliberately a zone no host here runs in. Dev workstations use {@code TZ=Asia/Bangkok}
+     * and the CI runner uses UTC, so asserting on either would pass on one of them even if
+     * the property were ignored entirely. The guard below pins that.
      */
     private static final TimeZone NEW_YORK = TimeZone.getTimeZone("America/New_York");
 

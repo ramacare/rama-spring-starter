@@ -401,10 +401,19 @@ explicit setting always overwrites the starter's default:
 spring.jackson.time-zone=Asia/Bangkok
 ```
 
-> **Upgrading from 4.3.1 or earlier.** Both mappers previously produced `Z`. Code that
+> **Upgrading from 4.3.1 or earlier.** Deserialization previously produced `Z`. Code that
 > compensated by normalizing to the system zone (`atZoneSameInstant(ZoneId.systemDefault())`)
 > is unaffected — that is idempotent once the mapper is correct. Code that added a fixed
 > offset to undo the shift will now double-correct and must drop the compensation.
+>
+> **Serialization changes too.** Jackson converts values into the configured zone on write
+> only once a zone is set explicitly; previously none was, so `OffsetDateTime` was written
+> with whatever offset the value carried. It is now normalized to the JVM zone. On a
+> deployment pinned to `TZ=Asia/Bangkok` this is a no-op — values read from the database
+> already carry `+07:00` — but a JVM in a different zone will now write that zone's offset.
+> The instant is always preserved. Tests that assert a literal offset in serialized output
+> should assert on the instant instead, or they will pass locally and fail on a CI runner
+> in a different zone.
 
 ## 7. Liquibase Migrations
 
