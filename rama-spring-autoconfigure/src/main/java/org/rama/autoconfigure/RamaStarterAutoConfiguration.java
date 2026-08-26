@@ -108,6 +108,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -168,10 +170,20 @@ public class RamaStarterAutoConfiguration {
     }
 
     /**
-     * This mapper is built directly rather than through Boot's
-     * {@link JsonMapperBuilderCustomizer} chain, so {@code spring.jackson.time-zone}
-     * would otherwise be read and then silently ignored. Honour it here, falling back
-     * to the JVM zone. See starter#39.
+     * Fallback mapper for contexts without Boot's Jackson auto-configuration.
+     *
+     * <p><strong>This bean normally does not register.</strong> The
+     * {@link ConditionalOnMissingBean} is typed by the return type, {@link ObjectMapper},
+     * and Boot's {@code jacksonJsonMapper} is a {@link JsonMapper} — hence an
+     * {@code ObjectMapper} — so the condition matches and this backs off. It materializes
+     * only when {@code JacksonAutoConfiguration} is excluded or absent.
+     *
+     * <p>Consequently the starter's services never receive this instance: they all inject
+     * {@link JsonMapper} and get Boot's managed bean, which is framed by
+     * {@link #ramaStarterTimeZoneCustomizer}. Built directly rather than through the
+     * {@link JsonMapperBuilderCustomizer} chain, so on the fallback path
+     * {@code spring.jackson.time-zone} is read here explicitly rather than being silently
+     * ignored. See starter#39.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -205,18 +217,18 @@ public class RamaStarterAutoConfiguration {
      * for the duration of the request — long enough for {@code @PrePersist} listeners
      * and validators to read the wrong wall clock. See starter#39.
      *
-     * <p>Backs off when the consumer has set {@code spring.jackson.time-zone}, which
-     * Boot's own customizer already applies.
+     * <p>Ordered {@link Ordered#HIGHEST_PRECEDENCE} so it runs <em>before</em> Boot's own
+     * customizer (which is {@code Ordered} at 0). Boot applies
+     * {@code spring.jackson.time-zone} only when that property is set, so an explicit
+     * consumer setting overwrites this default, and an unset one leaves it in place. The
+     * property therefore wins structurally, without this bean needing to inspect it —
+     * every customizer in the list is applied to the same builder, in order.
      */
     @Bean
     @ConditionalOnMissingBean(name = "ramaStarterTimeZoneCustomizer")
-    JsonMapperBuilderCustomizer ramaStarterTimeZoneCustomizer(ObjectProvider<JacksonProperties> jacksonProperties) {
-        return builder -> {
-            JacksonProperties properties = jacksonProperties.getIfAvailable();
-            if (properties == null || properties.getTimeZone() == null) {
-                builder.defaultTimeZone(java.util.TimeZone.getDefault());
-            }
-        };
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    JsonMapperBuilderCustomizer ramaStarterTimeZoneCustomizer() {
+        return builder -> builder.defaultTimeZone(java.util.TimeZone.getDefault());
     }
 
     @Bean

@@ -71,7 +71,7 @@ This avoids self-invocation in the service (calling `this.method()` bypasses the
 ### Auto-Configuration
 Most beans are registered with `@ConditionalOnMissingBean`. Consumer applications can override any starter bean.
 
-Jackson mappers are framed in the JVM default time zone, not Jackson's built-in UTC default — `ramaStarterObjectMapper`, `JsonConverter`'s static mapper, and Boot's managed `JsonMapper` (via `ramaStarterTimeZoneCustomizer`) alike. `spring.jackson.time-zone` overrides it; the starter backs off when that property is set. See starter#39.
+Jackson mappers are framed in the JVM default time zone, not Jackson's built-in UTC default. Every starter service injects **Boot's managed `JsonMapper`** (`jacksonJsonMapper`), framed via the `ramaStarterTimeZoneCustomizer` bean; the static mappers in `JsonConverter` and `JsonEncryptConverter` are framed the same way. `CanonicalJson` is deliberately pinned to UTC so idempotency hashes stay stable across deployments. `spring.jackson.time-zone` overrides the default — the starter's customizer is ordered `HIGHEST_PRECEDENCE` so Boot's own customizer runs after it and wins. Note `ramaStarterObjectMapper` is a fallback that does **not** register when Boot's Jackson auto-config is present; override `JsonMapper` to replace what the services use. See starter#39.
 
 **Feature flags** (all prefixed with `rama.`, default `true`):
 - `rama.jpa.enabled` -- JPA entity scanning

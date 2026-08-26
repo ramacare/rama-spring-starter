@@ -117,4 +117,25 @@ class JsonConverterTimeZoneTest {
         assertThat(restored.toInstant()).isEqualTo(original.toInstant());
         assertThat(restored.getOffset()).isEqualTo(ZoneId.systemDefault().getRules().getOffset(original.toInstant()));
     }
+
+    /**
+     * An encrypted JSON column is still a JSON column: it must round-trip datetimes through
+     * the same frame as {@link JsonConverter}, or the two converters disagree on the wall
+     * clock for the same value. See starter#39.
+     */
+    @Test
+    void jsonEncryptConverter_usesTheSameFrameAsJsonConverter() {
+        org.rama.util.EncryptionUtil.setKey("0123456789abcdef0123456789abcdef");
+        JsonEncryptConverter converter = new JsonEncryptConverter();
+        OffsetDateTime original = OffsetDateTime.now();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("recordedAt", original);
+
+        Object back = converter.convertToEntityAttribute(converter.convertToDatabaseColumn(payload));
+
+        OffsetDateTime restored = OffsetDateTime.parse((String) ((Map<?, ?>) back).get("recordedAt"));
+        assertThat(restored.toInstant()).isEqualTo(original.toInstant());
+        assertThat(restored.getOffset())
+                .isEqualTo(ZoneId.systemDefault().getRules().getOffset(original.toInstant()));
+    }
 }

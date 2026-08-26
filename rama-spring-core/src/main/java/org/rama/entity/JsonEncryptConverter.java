@@ -10,11 +10,17 @@ import tools.jackson.databind.cfg.CoercionAction;
 import tools.jackson.databind.cfg.CoercionInputShape;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.TimeZone;
+
 @Converter
 public class JsonEncryptConverter implements AttributeConverter<Object, String> {
     private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
             .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            // Same frame as JsonConverter: an encrypted JSON column is still a JSON
+            // column, and must not round-trip datetimes through a different zone than
+            // its unencrypted counterpart. See starter#39.
+            .defaultTimeZone(TimeZone.getDefault())
             .withCoercionConfigDefaults(cfg ->
                     cfg.setCoercion(CoercionInputShape.String, CoercionAction.TryConvert))
             .build();

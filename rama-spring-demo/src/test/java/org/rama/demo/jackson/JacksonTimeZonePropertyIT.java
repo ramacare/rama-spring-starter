@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.OffsetDateTime;
@@ -17,42 +17,52 @@ import java.util.TimeZone;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code spring.jackson.time-zone} used to be silently inert for starter consumers: the
- * starter built {@code ramaStarterObjectMapper} outside Boot's customizer chain, so the
- * property was read and then ignored, with no warning. Both mappers must now honour it.
- * See starter#39.
+ * {@code spring.jackson.time-zone} must still win over the starter's default.
+ *
+ * <p>{@code ramaStarterTimeZoneCustomizer} is ordered {@code HIGHEST_PRECEDENCE} and Boot's
+ * own customizer is {@code Ordered} at 0, so the starter sets the JVM zone first and Boot
+ * overwrites it whenever the property is set. This is what keeps the documented property
+ * meaningful rather than silently inert. See starter#39.
  */
 @Tag("integration")
-@SpringBootTest(properties = "spring.jackson.time-zone=Asia/Bangkok")
+@SpringBootTest(properties = "spring.jackson.time-zone=America/New_York")
 @ActiveProfiles("h2")
 class JacksonTimeZonePropertyIT {
 
-    private static final TimeZone BANGKOK = TimeZone.getTimeZone("Asia/Bangkok");
+    /**
+     * Deliberately not Asia/Bangkok: CI and dev machines run with {@code TZ=Asia/Bangkok},
+     * so asserting on that zone would pass even if the property were ignored entirely.
+     */
+    private static final TimeZone NEW_YORK = TimeZone.getTimeZone("America/New_York");
+
+    @Autowired
+    private ApplicationContext ctx;
 
     @Autowired
     private JsonMapper jsonMapper;
 
-    @Autowired
-    private ObjectMapper ramaStarterObjectMapper;
-
     @Test
-    void managedJsonMapper_honoursConfiguredTimeZone() {
-        assertThat(jsonMapper.deserializationConfig().getTimeZone()).isEqualTo(BANGKOK);
-    }
-
-    @Test
-    void starterObjectMapper_honoursConfiguredTimeZone() {
-        assertThat(ramaStarterObjectMapper.deserializationConfig().getTimeZone()).isEqualTo(BANGKOK);
+    void configuredTimeZone_overridesTheStarterDefault() {
+        assertThat(NEW_YORK).isNotEqualTo(TimeZone.getDefault());
+        assertThat(jsonMapper).isSameAs(ctx.getBean("jacksonJsonMapper"));
+        assertThat(jsonMapper.deserializationConfig().getTimeZone()).isEqualTo(NEW_YORK);
     }
 
     @Test
     void convertValue_framesInConfiguredZone() {
         Map<String, Object> input = new LinkedHashMap<>();
-        input.put("recordedAt", "2026-08-24T23:57:17Z");
+        input.put("recordedAt", "2026-08-25T04:00:00Z");
 
         OffsetDateTime converted = jsonMapper.convertValue(input, JacksonTimeZoneIT.Holder.class).recordedAt;
 
-        assertThat(converted.getOffset()).isEqualTo(ZoneOffset.ofHours(7));
+        // 04:00Z is midnight in New York on the 25th (EDT, -04:00).
+        assertThat(converted.getOffset()).isEqualTo(ZoneOffset.ofHours(-4));
         assertThat(converted.toLocalDate()).isEqualTo(java.time.LocalDate.of(2026, 8, 25));
+    }
+
+    /** The coercion customizer must survive alongside the property-driven zone. */
+    @Test
+    void coercionCustomizer_stillApplies() {
+        assertThat(jsonMapper.readValue("{\"value\":\"1\"}", JacksonTimeZoneIT.Coercible.class).value).isEqualTo(1);
     }
 }

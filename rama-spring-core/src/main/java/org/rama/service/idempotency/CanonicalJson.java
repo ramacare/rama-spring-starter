@@ -11,6 +11,8 @@ import tools.jackson.databind.introspect.AnnotatedMember;
 import tools.jackson.databind.introspect.JacksonAnnotationIntrospector;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.TimeZone;
+
 import java.util.Set;
 
 /**
@@ -45,6 +47,13 @@ public final class CanonicalJson {
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .changeDefaultPropertyInclusion(inc -> inc.withValueInclusion(JsonInclude.Include.NON_NULL))
                 .annotationIntrospector(new VolatileIntrospector())
+                // Deliberately UTC, not the JVM zone. This mapper exists to produce a
+                // stable byte-for-byte rendering for idempotency hashing; framing it in
+                // the JVM zone would make the same request hash differently across
+                // deployments, and would invalidate every stored signature on a zone
+                // change. Unlike JsonConverter, nothing downstream reads a wall clock
+                // off this output. See starter#39.
+                .defaultTimeZone(TimeZone.getTimeZone("UTC"))
                 .build();
     }
 

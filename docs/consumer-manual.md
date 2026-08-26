@@ -366,12 +366,26 @@ incoming `+07:00` value to `Z`. The instant is preserved, but `toLocalDate()` an
 `getHour()` then disagree with the caller — and for anything before 07:00 local, so does
 the calendar date.
 
-The starter frames both mappers in the JVM's default zone instead, matching
+The starter frames its mappers in the JVM's default zone instead, matching
 `OffsetDateTimeConverter`, `DateTimeUtil`, `QueryUtil` and `MongoDBUtil`:
 
-- `ramaStarterObjectMapper` (and the static mapper inside `JsonConverter`)
-- Spring Boot's managed `JsonMapper` — the one injected into `GenericEntityService`,
-  `GenericApiService`, `SystemLogService` and `DefaultMeilisearchMapper`
+- **Spring Boot's managed `JsonMapper`**, via the `ramaStarterTimeZoneCustomizer` bean. This
+  is the mapper every starter service actually receives — `GenericEntityService`,
+  `GenericApiService`, `SystemLogService`, `MeilisearchService` and
+  `DefaultMeilisearchMapper` all inject `JsonMapper`, so they all share this one instance.
+- **The static mappers in `JsonConverter` and `JsonEncryptConverter`**, used by `@Convert`
+  JSON columns.
+
+Two mappers are deliberately *not* framed in the JVM zone:
+
+- `CanonicalJson` is pinned to UTC. Idempotency signatures are hashed off its output, so it
+  must render identically on every deployment regardless of the container's `TZ`.
+- `XMLUtil` is left at Jackson's defaults; it does not carry datetime payloads.
+
+`ramaStarterObjectMapper` is a fallback that only registers when Boot's Jackson
+auto-configuration is absent. In a normal Boot application its `@ConditionalOnMissingBean`
+matches Boot's `jacksonJsonMapper` and it never registers — override `JsonMapper`, not
+`ObjectMapper`, if you need to replace the mapper the services use.
 
 Pin the zone explicitly in your container so the JVM, the mappers and the database agree:
 
@@ -379,8 +393,9 @@ Pin the zone explicitly in your container so the JVM, the mappers and the databa
 ENV TZ=Asia/Bangkok
 ```
 
-To frame Jackson somewhere other than the JVM zone, set the standard Spring property —
-the starter backs off when it is present:
+To frame Jackson somewhere other than the JVM zone, set the standard Spring property. The
+starter's customizer is ordered `HIGHEST_PRECEDENCE` and Boot's own runs after it, so an
+explicit setting always overwrites the starter's default:
 
 ```properties
 spring.jackson.time-zone=Asia/Bangkok
