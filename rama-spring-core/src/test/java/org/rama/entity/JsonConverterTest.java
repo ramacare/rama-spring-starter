@@ -31,6 +31,16 @@ class JsonConverterTest {
         assertThat(back).isInstanceOf(Map.class).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP).isEmpty();
     }
 
+    /**
+     * The point of this test is the wire <em>shape</em>: an ISO-8601 string rather than
+     * Jackson's array-of-nanos rendering.
+     *
+     * <p>It deliberately does not assert a literal offset. Since starter#39 the mapper has an
+     * explicitly configured time zone, and Jackson converts values into that zone on write
+     * once one is set — so the rendered offset is the JVM's, not the one the value was built
+     * with. Asserting {@code +07:00} passed on a {@code TZ=Asia/Bangkok} workstation and
+     * failed on the UTC CI runner. The instant is what must survive, and it does.
+     */
     @Test
     void offsetDateTime_serializesAsIso8601String_notNanos() {
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -39,8 +49,13 @@ class JsonConverterTest {
 
         String json = converter.convertToDatabaseColumn(payload);
 
-        assertThat(json).contains("\"recordedAt\":\"2026-05-09T10:30:00+07:00\"");
         assertThat(json).doesNotMatch(".*\"recordedAt\":\\[.*\\].*"); // not array of nanos
+
+        Object back = converter.convertToEntityAttribute(json);
+        OffsetDateTime restored = OffsetDateTime.parse((String) ((Map<?, ?>) back).get("recordedAt"));
+        assertThat(restored.toInstant()).isEqualTo(now.toInstant());
+        assertThat(restored.getOffset())
+                .isEqualTo(java.time.ZoneId.systemDefault().getRules().getOffset(now.toInstant()));
     }
 
     @Test

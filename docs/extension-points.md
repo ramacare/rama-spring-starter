@@ -10,7 +10,7 @@ Most starter beans use `@ConditionalOnMissingBean`. Declare your own bean of the
 |-----------|-----------------|---------------|
 | `StaticValueResolver` | Loads from MasterItem table with TTL cache | Custom static value source |
 | `MeilisearchErrorHandler` | Logs errors + writes to SystemLog | Custom error handling |
-| `ObjectMapper` | Jackson defaults (lenient) | Custom serialization |
+| `ObjectMapper` | Lenient string coercion, framed in the JVM time zone | Custom serialization |
 | `WebClient.Builder` | 5MB max in-memory | Different limits |
 | `RuntimeWiringConfigurer` | Email validation + BigDecimal scalar | Custom GraphQL wiring |
 | `StarterGraphqlExceptionResolver` | Generic error formatting | Custom error responses |

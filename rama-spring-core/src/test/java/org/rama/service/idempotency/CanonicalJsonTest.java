@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.rama.annotation.VolatileForIdempotency;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -92,5 +93,31 @@ class CanonicalJsonTest {
         public String name;
         @VolatileForIdempotency
         public String correlationId;
+    }
+
+    /**
+     * Idempotency signatures are hashed off this rendering, so the same request must
+     * stringify identically on every deployment. Framing this mapper in the JVM zone —
+     * as {@link org.rama.entity.JsonConverter} correctly is — would make the hash depend
+     * on the container's {@code TZ} and invalidate stored signatures on a zone change.
+     * This mapper is therefore deliberately pinned to UTC. See starter#39.
+     */
+    @Test
+    void datetimesAreRenderedInUtcRegardlessOfJvmZone() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("at", OffsetDateTime.parse("2026-08-25T06:57:17+07:00"));
+
+        assertThat(CanonicalJson.stringify(map)).isEqualTo("{\"at\":\"2026-08-24T23:57:17Z\"}");
+    }
+
+    /** The same instant sent in two wire formats must produce one signature. */
+    @Test
+    void equivalentInstantsInDifferentOffsetsCanonicalizeIdentically() {
+        Map<String, Object> bangkok = new LinkedHashMap<>();
+        bangkok.put("at", OffsetDateTime.parse("2026-08-25T06:57:17+07:00"));
+        Map<String, Object> utc = new LinkedHashMap<>();
+        utc.put("at", OffsetDateTime.parse("2026-08-24T23:57:17Z"));
+
+        assertThat(CanonicalJson.stringify(bangkok)).isEqualTo(CanonicalJson.stringify(utc));
     }
 }
