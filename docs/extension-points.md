@@ -15,9 +15,9 @@ Most starter beans use `@ConditionalOnMissingBean`. Declare your own bean of the
 | `RuntimeWiringConfigurer` | Email validation + BigDecimal scalar | Custom GraphQL wiring |
 | `StarterGraphqlExceptionResolver` | Generic error formatting | Custom error responses |
 
-## Replacement Hooks
+## Replacement Hooks (auto-wired)
 
-Extend document template processing with custom hooks:
+Extend document template processing with custom hooks. Declare either as a `@Component` and the starter collects it — `RamaStarterAutoConfiguration` gathers every `ReplacementObjectHook` and `ReplacementStringHook` bean into `ReplacementHooks`, which `ReplacementProcessor` invokes on every placeholder. No wiring on your side:
 
 ### ReplacementObjectHook
 
@@ -56,22 +56,89 @@ public class MaskHooks implements ReplacementStringHook {
 }
 ```
 
-### ReplacementTransformer
+## Replacement Transformers (consumer-wired)
 
-Transform the entire replacement data map before template processing:
+`ReplacementTransformer` reshapes the **entire** replacement map before template processing —
+useful when a value depends on the template being printed, or on patient/encounter context.
+
+> **Unlike the hooks above, the starter does not apply these for you.** It defines the contract
+> only. Declaring a `@Component` and expecting it to run will not work: nothing collects it, and
+> the affected placeholder renders empty with no error. You must collect and apply the chain
+> yourself. The split is deliberate — applying transformers needs a template code and patient
+> context that the starter's `processTemplate(InputStream, Map)` has no knowledge of.
+
+The contract:
+
+```java
+public interface ReplacementTransformer {
+    Map<String, Object> transform(Map<String, Object> replacements, String mrn, String encounterId);
+
+    /** "" (the default) applies to every template; otherwise only to this template code. */
+    default String getTemplateCode() { return ""; }
+
+    default int getOrder() { return Integer.MAX_VALUE; }
+}
+```
+
+### 1. Implement it
+
+Note the return type — the transformed map is returned, not mutated in place.
 
 ```java
 @Component
-public class MyTransformer implements ReplacementTransformer {
+@RequiredArgsConstructor
+public class EReceiptTransformer implements ReplacementTransformer {
+    private final StaticValueResolver staticValueService;
+
     @Override
-    public void transform(Map<String, Object> replacements, String mrn, String encounterId) {
-        replacements.put("customField", computeValue(mrn));
+    public Map<String, Object> transform(Map<String, Object> replacements, String mrn, String encounterId) {
+        if ("90".equals(replacements.get("stationNo"))) {
+            replacements.put("recipient", staticValueService.getStaticValue("EReceiptRecipient"));
+        }
+        return replacements;
     }
 
     @Override
-    public String getTemplateCode() { return "MY_TEMPLATE"; }
+    public String getTemplateCode() { return "receipt"; }
 }
 ```
+
+### 2. Apply the chain before calling `processTemplate`
+
+```java
+@Service
+@RequiredArgsConstructor
+public class DocumentDataEnricher {
+
+    private final Map<String, ReplacementTransformer> replacementTransformers;
+
+    public Map<String, Object> applyTransformers(String templateCode, Map<String, Object> replacements,
+                                                 String mrn, String encounterId) {
+        List<ReplacementTransformer> sorted = replacementTransformers.values().stream()
+                .filter(t -> t.getTemplateCode() == null
+                          || t.getTemplateCode().isEmpty()
+                          || t.getTemplateCode().equals(templateCode))
+                .sorted(Comparator.comparingInt(ReplacementTransformer::getOrder))
+                .toList();
+
+        for (ReplacementTransformer transformer : sorted) {
+            replacements = transformer.transform(replacements, mrn, encounterId);
+        }
+        return replacements;
+    }
+}
+```
+
+Then, in your print service, before resolving the template:
+
+```java
+documentData = documentDataEnricher.applyTransformers(
+        templateCode, documentData, document.getMrn(), document.getEncounterId());
+```
+
+**Reference implementation:** `DocumentDataEnricher` in `ramaservice`, `ramaservice-rewrite` and
+`his-service` — all three carry the same class, called from their print service before template
+resolution.
 
 ## Mongo Mapper
 
