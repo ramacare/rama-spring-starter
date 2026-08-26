@@ -24,6 +24,30 @@ Also worth knowing: `spring.jackson.time-zone` used to be silently ignored by th
 and now works, and overriding the `ObjectMapper` bean never replaced the mapper the starter's
 services use — override `JsonMapper`. See [Date/Time Frame](#datetime-frame) for the detail.
 
+### Upgrading past 4.3.2 — `rama.idempotency.default-ttl` now actually applies
+
+`@IdempotentMutation` used to default to a hardcoded `ttl = "30s"`, which meant
+`rama.idempotency.default-ttl` was read only by a method annotated `@IdempotentMutation(ttl = "")`
+— effectively never. The annotation now defaults to blank and falls through to the property, so a
+deployment can retune every unqualified mutation from one place.
+
+**If you set `default-ttl` to something other than `30s`**, every `@IdempotentMutation` that does not
+name its own `ttl` now picks that value up, where before it silently stayed at 30 seconds. Pin the old
+behaviour by writing `@IdempotentMutation(ttl = "30s")` on the methods that need it — an explicit `ttl`
+still wins over the property. If you never set `default-ttl`, nothing changes: the property's own
+default is 30 seconds.
+
+`rama.idempotency.lock-wait-timeout` is **removed**. It was never read by anything; the wait for a
+contended dedup row has always been governed by the database's own lock timeout (PostgreSQL
+`lock_timeout`, SQL Server `SET LOCK_TIMEOUT`). Delete it from your configuration — with
+`spring-boot-configuration-processor` on the classpath it will now show as an unknown property.
+
+Also worth knowing: the idempotency auto-configuration no longer backs off silently. If
+`rama.idempotency.enabled` is true but no `SystemRequestDedupRepository` bean resolves — usually
+because `org.rama.repository` is missing from your `@EnableJpaRepositories(basePackages = ...)` — the
+starter now logs a warning at startup and any `@IdempotentMutation` call fails with a message naming
+the fix, instead of running unguarded. See starter#46.
+
 ## 1. Add the Dependency
 
 ```xml
@@ -136,7 +160,8 @@ rama:
   idempotency:
     enabled: true                    # @IdempotentMutation aspect (see Quartz + JPA section)
     header-name: Idempotency-Key
-    default-ttl: 30s
+    default-ttl: 30s                 # TTL for any @IdempotentMutation that sets no ttl of its own
+    cleanup-interval: 5m             # How often the Quartz job evicts expired rows
     cors:
       augment: true                  # Inject header-name into any CorsConfigurationSource bean
 ```
