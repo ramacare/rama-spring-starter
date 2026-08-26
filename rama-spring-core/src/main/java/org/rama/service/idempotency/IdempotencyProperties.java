@@ -16,6 +16,4 @@ public class IdempotencyProperties {
     private String headerName = "Idempotency-Key";
 
     private Duration cleanupInterval = Duration.ofMinutes(5);
-
-    private Duration lockWaitTimeout = Duration.ofSeconds(30);
 }
