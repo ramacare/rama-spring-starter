@@ -62,10 +62,12 @@ public class MaskHooks implements ReplacementStringHook {
 useful when a value depends on the template being printed, or on patient/encounter context.
 
 > **Unlike the hooks above, the starter does not apply these for you.** It defines the contract
-> only. Declaring a `@Component` and expecting it to run will not work: nothing collects it, and
-> the affected placeholder renders empty with no error. You must collect and apply the chain
-> yourself. The split is deliberate — applying transformers needs a template code and patient
-> context that the starter's `processTemplate(InputStream, Map)` has no knowledge of.
+> only. Declaring a `@Component` and expecting it to run will not work: nothing collects it, so
+> the value your transformer would have added is simply never there. Nothing throws and nothing
+> is logged — a simple placeholder such as `{{hospitalName}}` is left in the document verbatim,
+> while a nested one such as `{{extra.hospitalName}}` renders empty. You must collect and apply
+> the chain yourself. The split is deliberate — applying transformers needs a template code and
+> patient context that the starter's `processTemplate(InputStream, Map)` has no knowledge of.
 
 The contract:
 
