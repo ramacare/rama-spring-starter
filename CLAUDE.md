@@ -71,6 +71,23 @@ This avoids self-invocation in the service (calling `this.method()` bypasses the
 ### Auto-Configuration
 Most beans are registered with `@ConditionalOnMissingBean`. Consumer applications can override any starter bean.
 
+**Never put a bean-inspecting condition on a nested `@Configuration`.** `@ConditionalOnBean` and
+`@ConditionalOnMissingBean` are `REGISTER_BEAN`-phase conditions. `ConfigurationClassParser` calls
+`processMemberClasses` at the top of `doProcessConfigurationClass` but only records the class itself
+afterwards, so a nested member configuration is evaluated *ahead* of the `@Bean` methods around it —
+against a bean factory that may not hold the definitions it is asking about. When that happens the
+whole class is skipped: every bean in it vanishes with no error, no warning and no log line. This cost
+us `@IdempotentMutation` silently guarding nothing in production (starter#46).
+
+On a nested `@Configuration`, use only `PARSE_CONFIGURATION`-phase conditions —
+`@ConditionalOnProperty`, `@ConditionalOnClass`, or a custom `ConfigurationCondition` that declares the
+phase (see `RamaIdempotencyCorsAutoConfiguration.OnAugmenterEligible`). Anything that inspects the bean
+factory belongs on a `@Bean` method. When the bean being waited on is registered by the *consumer* —
+any `org.rama.repository.*` repository, which only ever arrives via their
+`@EnableJpaRepositories(basePackages = {..., "org.rama.repository"})` — prefer `ObjectProvider` over a
+condition, and fail loudly rather than backing off silently. `@AutoConfiguration(afterName = ...)` does
+not help there: it orders auto-configurations against each other, and a consumer's registrar is not one.
+
 Jackson mappers are framed in the JVM default time zone, not Jackson's built-in UTC default. Every starter service injects **Boot's managed `JsonMapper`** (`jacksonJsonMapper`), framed via the `ramaStarterTimeZoneCustomizer` bean; the static mappers in `JsonConverter` and `JsonEncryptConverter` are framed the same way. `CanonicalJson` is deliberately pinned to UTC so idempotency hashes stay stable across deployments. `spring.jackson.time-zone` overrides the default — the starter's customizer is ordered `HIGHEST_PRECEDENCE` so Boot's own customizer runs after it and wins. Note `ramaStarterObjectMapper` is a fallback that does **not** register when Boot's Jackson auto-config is present; override `JsonMapper` to replace what the services use. See starter#39.
 
 **Feature flags** (all prefixed with `rama.`, default `true`):

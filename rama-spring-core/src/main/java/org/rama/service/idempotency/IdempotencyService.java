@@ -3,6 +3,7 @@ package org.rama.service.idempotency;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.rama.entity.system.SystemRequestDedup;
 import org.rama.entity.system.SystemRequestDedup.Status;
 import org.rama.repository.system.SystemRequestDedupRepository;
@@ -17,16 +18,34 @@ import java.time.OffsetDateTime;
 @Slf4j
 public class IdempotencyService {
 
+    static final String UNAVAILABLE_MESSAGE =
+            "rama.idempotency is enabled but no SystemRequestDedupRepository bean is present, "
+                    + "so @IdempotentMutation cannot guard anything. Add \"org.rama.repository\" to your "
+                    + "@EnableJpaRepositories(basePackages = ...), or set rama.idempotency.enabled=false "
+                    + "if you do not want idempotency. See starter#46.";
+
+    /**
+     * Null when the consumer's repository scanning does not reach
+     * {@code org.rama.repository}. Resolved once, at bean-creation time, rather
+     * than gated by {@code @ConditionalOnBean} — bean creation runs after every
+     * bean definition is registered, so the outcome cannot depend on the order
+     * in which Spring Data's registrar and this auto-configuration contribute
+     * their definitions. See starter#46.
+     */
+    @Nullable
     private final SystemRequestDedupRepository repository;
     private final EntityManager entityManager;
     private final ResponseCodec responseCodec;
     private final TransactionTemplate claimTransactionTemplate;
     private final TransactionTemplate lockTransactionTemplate;
 
-    public IdempotencyService(SystemRequestDedupRepository repository,
+    public IdempotencyService(@Nullable SystemRequestDedupRepository repository,
                               EntityManager entityManager,
                               ResponseCodec responseCodec,
                               PlatformTransactionManager transactionManager) {
+        if (repository == null) {
+            log.warn(UNAVAILABLE_MESSAGE);
+        }
         this.repository = repository;
         this.entityManager = entityManager;
         this.responseCodec = responseCodec;
@@ -53,6 +72,7 @@ public class IdempotencyService {
      */
     public boolean tryClaim(String signature, String method, String username,
                             OffsetDateTime now, OffsetDateTime expiresAt) {
+        requireRepository();
         Boolean result = claimTransactionTemplate.execute(status -> {
             SystemRequestDedup row = new SystemRequestDedup();
             row.setId(signature);
@@ -92,6 +112,7 @@ public class IdempotencyService {
     public Object lockAndExecute(String signature, Type returnType,
                                  OffsetDateTime now, OffsetDateTime expiresAt,
                                  ThrowingSupplier<Object> work) throws Throwable {
+        requireRepository();
         Throwable[] thrown = new Throwable[1];
         try {
             return lockTransactionTemplate.execute(status -> {
@@ -122,6 +143,20 @@ public class IdempotencyService {
         } catch (Throwable outer) {
             if (thrown[0] != null) throw thrown[0];
             throw outer;
+        }
+    }
+
+    /**
+     * True when the dedup repository resolved and {@code @IdempotentMutation}
+     * can actually guard a call.
+     */
+    public boolean isAvailable() {
+        return repository != null;
+    }
+
+    private void requireRepository() {
+        if (repository == null) {
+            throw new IllegalStateException(UNAVAILABLE_MESSAGE);
         }
     }
 

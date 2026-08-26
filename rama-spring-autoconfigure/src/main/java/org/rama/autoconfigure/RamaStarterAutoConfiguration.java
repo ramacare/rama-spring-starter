@@ -404,9 +404,31 @@ public class RamaStarterAutoConfiguration {
         return new QuartzService(scheduler, basePackages);
     }
 
+    /**
+     * Gated on the property alone. {@code @ConditionalOnProperty} is a
+     * {@code PARSE_CONFIGURATION}-phase condition, so it is evaluated while the
+     * configuration class is parsed and cannot be affected by bean-definition
+     * ordering.
+     *
+     * <p>This class used to also carry
+     * {@code @ConditionalOnBean(SystemRequestDedupRepository.class)}. That is a
+     * {@code REGISTER_BEAN}-phase condition, and
+     * {@link org.springframework.context.annotation.ConfigurationClassParser}
+     * processes member classes before their enclosing class finishes, so a nested
+     * configuration is evaluated ahead of the {@code @Bean} methods around it —
+     * against a bean factory that may not yet hold the repository definitions the
+     * consumer's {@code @EnableJpaRepositories} contributes. When it lost that
+     * race the entire configuration was skipped: no aspect, no service, no log
+     * line, and {@code @IdempotentMutation} silently guarded nothing.
+     *
+     * <p>The repository is now resolved through {@link ObjectProvider} inside the
+     * {@code @Bean} methods instead. Those run during bean creation, after every
+     * definition is registered, so the outcome no longer depends on ordering; a
+     * genuinely absent repository produces a startup warning and a descriptive
+     * failure on use rather than silence. See starter#46.
+     */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "rama.idempotency", name = "enabled", havingValue = "true", matchIfMissing = true)
-    @ConditionalOnBean(SystemRequestDedupRepository.class)
     static class RamaStarterIdempotencyConfiguration {
 
         @Bean
@@ -431,11 +453,11 @@ public class RamaStarterAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        IdempotencyService idempotencyService(SystemRequestDedupRepository repository,
+        IdempotencyService idempotencyService(ObjectProvider<SystemRequestDedupRepository> repositoryProvider,
                                               EntityManager entityManager,
                                               ResponseCodec responseCodec,
                                               org.springframework.transaction.PlatformTransactionManager transactionManager) {
-            return new IdempotencyService(repository, entityManager, responseCodec, transactionManager);
+            return new IdempotencyService(repositoryProvider.getIfAvailable(), entityManager, responseCodec, transactionManager);
         }
 
         @Bean
@@ -450,8 +472,8 @@ public class RamaStarterAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        SystemRequestDedupCleanupJob systemRequestDedupCleanupJob(SystemRequestDedupRepository repository) {
-            return new SystemRequestDedupCleanupJob(repository);
+        SystemRequestDedupCleanupJob systemRequestDedupCleanupJob(ObjectProvider<SystemRequestDedupRepository> repositoryProvider) {
+            return new SystemRequestDedupCleanupJob(repositoryProvider.getIfAvailable());
         }
 
         @Bean

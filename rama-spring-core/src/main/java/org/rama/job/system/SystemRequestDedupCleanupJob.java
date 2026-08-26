@@ -2,6 +2,7 @@ package org.rama.job.system;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.quartz.JobDataMap;
 import org.rama.job.SmartJob;
 import org.rama.repository.system.SystemRequestDedupRepository;
@@ -21,11 +22,21 @@ import java.time.OffsetDateTime;
 @RequiredArgsConstructor
 public class SystemRequestDedupCleanupJob extends SmartJob {
 
-    private final SystemRequestDedupRepository repository;
+    /**
+     * Null when the consumer's repository scanning does not reach
+     * {@code org.rama.repository}. The job is registered regardless so that its
+     * existence never depends on bean-definition ordering; with no repository
+     * there is nothing to evict and it no-ops. See starter#46.
+     */
+    private final @Nullable SystemRequestDedupRepository repository;
 
     @Override
     @Transactional
     public void executeInternal(JobDataMap jobDataMap) {
+        if (repository == null) {
+            log.debug("Skipping system_request_dedup cleanup: no SystemRequestDedupRepository bean");
+            return;
+        }
         int deleted = repository.deleteExpired(OffsetDateTime.now());
         if (deleted > 0) {
             log.info("Evicted {} expired system_request_dedup rows", deleted);
