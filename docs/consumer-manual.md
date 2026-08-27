@@ -24,7 +24,31 @@ Also worth knowing: `spring.jackson.time-zone` used to be silently ignored by th
 and now works, and overriding the `ObjectMapper` bean never replaced the mapper the starter's
 services use — override `JsonMapper`. See [Date/Time Frame](#datetime-frame) for the detail.
 
-### Upgrading past 4.3.2 — `updateEntity` reads under a pessimistic lock
+### Upgrading past 4.3.2 — `rama.idempotency.default-ttl` now actually applies
+
+`@IdempotentMutation` used to default to a hardcoded `ttl = "30s"`, which meant
+`rama.idempotency.default-ttl` was read only by a method annotated `@IdempotentMutation(ttl = "")`
+— effectively never. The annotation now defaults to blank and falls through to the property, so a
+deployment can retune every unqualified mutation from one place.
+
+**If you set `default-ttl` to something other than `30s`**, every `@IdempotentMutation` that does not
+name its own `ttl` now picks that value up, where before it silently stayed at 30 seconds. Pin the old
+behaviour by writing `@IdempotentMutation(ttl = "30s")` on the methods that need it — an explicit `ttl`
+still wins over the property. If you never set `default-ttl`, nothing changes: the property's own
+default is 30 seconds.
+
+`rama.idempotency.lock-wait-timeout` is **removed**. It was never read by anything; the wait for a
+contended dedup row has always been governed by the database's own lock timeout (PostgreSQL
+`lock_timeout`, SQL Server `SET LOCK_TIMEOUT`). Delete it from your configuration — with
+`spring-boot-configuration-processor` on the classpath it will now show as an unknown property.
+
+Also worth knowing: the idempotency auto-configuration no longer backs off silently. If
+`rama.idempotency.enabled` is true but no `SystemRequestDedupRepository` bean resolves — usually
+because `org.rama.repository` is missing from your `@EnableJpaRepositories(basePackages = ...)` — the
+starter now logs a warning at startup and any `@IdempotentMutation` call fails with a message naming
+the fix, instead of running unguarded. See starter#46.
+
+### Upgrading past 4.3.3 — `updateEntity` reads under a pessimistic lock
 
 `GenericEntityService.updateEntity` now reads the row with `LockModeType.PESSIMISTIC_WRITE`
 (`SELECT … FOR UPDATE`) instead of a plain `findById`, so its `updatedAt` conflict check is
@@ -59,29 +83,30 @@ Note this closes the window, not the whole gap: the conflict check only runs whe
 actually sends `timestampField.updatedAt`. Omit it and the update is still last-write-wins,
 locked or not. See starter#41.
 
-### Upgrading past 4.3.2 — `rama.idempotency.default-ttl` now actually applies
+### Upgrading past 4.3.3 — the idempotency cleanup job is actually scheduled now
 
-`@IdempotentMutation` used to default to a hardcoded `ttl = "30s"`, which meant
-`rama.idempotency.default-ttl` was read only by a method annotated `@IdempotentMutation(ttl = "")`
-— effectively never. The annotation now defaults to blank and falls through to the property, so a
-deployment can retune every unqualified mutation from one place.
+`system_request_dedup` was never evicted: `systemRequestDedupCleanupJobDetail` and
+`systemRequestDedupCleanupTrigger` were gated on a `Scheduler` bean by a condition that ran
+before Quartz had contributed one, so nothing was ever registered in the `rama-idempotency`
+trigger group. Both beans are now gated on the Quartz classes being present instead, which is
+order-independent. A second defect sat behind it: the delete itself threw
+`TransactionRequiredException` under Hibernate 7.2, because Quartz reaches the job by
+self-invocation and no transaction from the job applied.
 
-**If you set `default-ttl` to something other than `30s`**, every `@IdempotentMutation` that does not
-name its own `ttl` now picks that value up, where before it silently stayed at 30 seconds. Pin the old
-behaviour by writing `@IdempotentMutation(ttl = "30s")` on the methods that need it — an explicit `ttl`
-still wins over the property. If you never set `default-ttl`, nothing changes: the property's own
-default is 30 seconds.
+**Nothing to change on your side**, but two things to know:
 
-`rama.idempotency.lock-wait-timeout` is **removed**. It was never read by anything; the wait for a
-contended dedup row has always been governed by the database's own lock timeout (PostgreSQL
-`lock_timeout`, SQL Server `SET LOCK_TIMEOUT`). Delete it from your configuration — with
-`spring-boot-configuration-processor` on the classpath it will now show as an unknown property.
+- **The table starts shrinking.** If it has been growing since you adopted idempotency, the job
+  will evict everything expired on its first run (every `cleanup-interval`, default `5m`). To
+  clear a large backlog up front rather than in one job run:
+  ```sql
+  DELETE FROM system_request_dedup WHERE expires_at < NOW();
+  ```
+- **Nothing was at risk while it was broken.** `lockAndExecute` treats an expired row as
+  re-runnable, so stale rows never replayed a response or blocked a request — the table simply
+  grew.
 
-Also worth knowing: the idempotency auto-configuration no longer backs off silently. If
-`rama.idempotency.enabled` is true but no `SystemRequestDedupRepository` bean resolves — usually
-because `org.rama.repository` is missing from your `@EnableJpaRepositories(basePackages = ...)` — the
-starter now logs a warning at startup and any `@IdempotentMutation` call fails with a message naming
-the fix, instead of running unguarded. See starter#46.
+Check `QRTZ_TRIGGERS` for a row in group `rama-idempotency` after upgrading to confirm it took.
+See starter#47.
 
 ## 1. Add the Dependency
 

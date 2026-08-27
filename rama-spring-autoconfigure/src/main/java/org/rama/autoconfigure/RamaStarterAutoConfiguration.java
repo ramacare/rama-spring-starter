@@ -476,8 +476,27 @@ public class RamaStarterAutoConfiguration {
             return new SystemRequestDedupCleanupJob(repositoryProvider.getIfAvailable());
         }
 
+        /**
+         * Gated on the Quartz classes being present, not on a {@code Scheduler} bean.
+         *
+         * <p>This carried {@code @ConditionalOnBean(Scheduler.class)} and never matched,
+         * so the cleanup job was never scheduled and {@code system_request_dedup} grew
+         * without bound. {@code @ConditionalOnBean} is a {@code REGISTER_BEAN}-phase
+         * condition and this is a {@code @Bean} method of a nested member
+         * {@code @Configuration}, which is evaluated ahead of the enclosing class — early
+         * enough that {@code QuartzAutoConfiguration} had not yet contributed the
+         * {@code Scheduler}, despite this auto-configuration correctly declaring
+         * {@code afterName = QuartzAutoConfiguration}. Auto-configuration ordering cannot
+         * reach a condition that runs before the ordering applies.
+         *
+         * <p>{@code @ConditionalOnClass} is order-independent — it inspects the classpath,
+         * never the bean factory — and states the real requirement. A {@link JobDetail}
+         * bean is inert when no scheduler collects it, so registering it without a
+         * {@code Scheduler} present costs nothing. See starter#47, and starter#46 for the
+         * same mechanism at class level.
+         */
         @Bean
-        @ConditionalOnBean(Scheduler.class)
+        @ConditionalOnClass(Scheduler.class)
         @ConditionalOnMissingBean(name = "systemRequestDedupCleanupJobDetail")
         JobDetail systemRequestDedupCleanupJobDetail() {
             return JobBuilder.newJob(SystemRequestDedupCleanupJob.class)
@@ -486,8 +505,9 @@ public class RamaStarterAutoConfiguration {
                     .build();
         }
 
+        /** @see #systemRequestDedupCleanupJobDetail() for why this is not gated on a {@code Scheduler} bean. */
         @Bean
-        @ConditionalOnBean(Scheduler.class)
+        @ConditionalOnClass(Scheduler.class)
         @ConditionalOnMissingBean(name = "systemRequestDedupCleanupTrigger")
         Trigger systemRequestDedupCleanupTrigger(JobDetail systemRequestDedupCleanupJobDetail, IdempotencyProperties properties) {
             long intervalMs = Math.max(1_000L, properties.getCleanupInterval().toMillis());
