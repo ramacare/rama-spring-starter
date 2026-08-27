@@ -1,6 +1,9 @@
 package org.rama.service;
 
 import graphql.GraphQLException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,10 +35,25 @@ class GenericEntityServiceTest {
     @Mock
     private BaseRepository<MasterItem, String> masterItemRepository;
 
+    /**
+     * {@code updateEntity} reads through the {@link EntityManager} so it can take a
+     * {@link LockModeType#PESSIMISTIC_WRITE} lock; every other path still goes through
+     * the repository. See starter#41.
+     */
+    @Mock
+    private EntityManager entityManager;
+
     @Captor
     private ArgumentCaptor<MasterItem> entityCaptor;
 
-    private final GenericEntityService genericEntityService = new GenericEntityService(JsonMapper.builder().build());
+    private GenericEntityService genericEntityService;
+
+    @BeforeEach
+    void setup() {
+        // Built here, not as a field initializer: field initializers run while the test
+        // instance is constructed, before MockitoExtension injects the @Mock fields.
+        genericEntityService = new GenericEntityService(JsonMapper.builder().build(), entityManager);
+    }
 
     @Test
     void createEntity_shouldCreateAndSave() {
@@ -88,7 +106,7 @@ class GenericEntityServiceTest {
         input.put("id", "GENDER^M");
         input.put("itemValue", "Male Updated");
 
-        when(masterItemRepository.findById("GENDER^M")).thenReturn(Optional.of(existing));
+        when(entityManager.find(MasterItem.class, "GENDER^M", LockModeType.PESSIMISTIC_WRITE)).thenReturn(existing);
         when(masterItemRepository.save(any(MasterItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doNothing().when(masterItemRepository).flush();
         doNothing().when(masterItemRepository).refresh(any(MasterItem.class));
@@ -100,7 +118,8 @@ class GenericEntityServiceTest {
 
         // Assert
         assertThat(result).isPresent();
-        verify(masterItemRepository).findById("GENDER^M");
+        verify(entityManager).find(MasterItem.class, "GENDER^M", LockModeType.PESSIMISTIC_WRITE);
+        verify(masterItemRepository, never()).findById(any());
         verify(masterItemRepository).save(any(MasterItem.class));
     }
 
@@ -110,7 +129,7 @@ class GenericEntityServiceTest {
         Map<String, Object> input = new HashMap<>();
         input.put("id", "NONEXISTENT");
 
-        when(masterItemRepository.findById("NONEXISTENT")).thenReturn(Optional.empty());
+        when(entityManager.find(MasterItem.class, "NONEXISTENT", LockModeType.PESSIMISTIC_WRITE)).thenReturn(null);
 
         // Act
         Optional<MasterItem> result = genericEntityService.updateEntity(

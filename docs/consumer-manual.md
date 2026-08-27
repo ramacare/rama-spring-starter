@@ -24,6 +24,41 @@ Also worth knowing: `spring.jackson.time-zone` used to be silently ignored by th
 and now works, and overriding the `ObjectMapper` bean never replaced the mapper the starter's
 services use — override `JsonMapper`. See [Date/Time Frame](#datetime-frame) for the detail.
 
+### Upgrading past 4.3.2 — `updateEntity` reads under a pessimistic lock
+
+`GenericEntityService.updateEntity` now reads the row with `LockModeType.PESSIMISTIC_WRITE`
+(`SELECT … FOR UPDATE`) instead of a plain `findById`, so its `updatedAt` conflict check is
+actually serialized. Previously two overlapping updaters both observed the same `updatedAt`,
+both passed the check, and one write was silently lost — the row lock taken at the `UPDATE`
+serialized the writes, but arrived long after the second caller had decided on a stale read.
+
+**What changes for you.** Concurrent updates to the *same row* now queue instead of
+interleaving, and the loser gets `Conflict detected: The updatedAt value does not match the
+current entity state.` — which is the outcome the check always intended. Correct behaviour,
+but callers that previously got a silent success may now see a conflict.
+
+**What to check before rolling this out:**
+
+- **Lock waits are now possible on the hottest write path.** A transaction that updates several
+  entities holds each lock until commit, so two transactions touching the same rows in a
+  different order can deadlock where they could not before. If you have long-running
+  transactions around `updateEntity`, shorten them.
+- **Your database's lock timeout governs the wait**, not any starter property. Confirm it is
+  sane — PostgreSQL `lock_timeout`, SQL Server `SET LOCK_TIMEOUT`. There is no
+  `rama.idempotency.lock-wait-timeout`; it was removed in this same release and never did
+  anything.
+- **The read now goes through `EntityManager.find`**, not `entityRepository.findById`. Nothing
+  in the starter overrides `findById` (`SoftDeleteRepository` does not), but if *your*
+  repository overrides it to add filtering, that filtering no longer applies on this path.
+
+The delete family (`deleteEntity`, `softDeleteEntity`, `hardDeleteEntity`) is deliberately
+left unlocked: none of them makes a read-derived decision that is written back, so there is no
+conflict check for a stale read to defeat. Delete racing update stays last-write-wins.
+
+Note this closes the window, not the whole gap: the conflict check only runs when the client
+actually sends `timestampField.updatedAt`. Omit it and the update is still last-write-wins,
+locked or not. See starter#41.
+
 ### Upgrading past 4.3.2 — `rama.idempotency.default-ttl` now actually applies
 
 `@IdempotentMutation` used to default to a hardcoded `ttl = "30s"`, which meant

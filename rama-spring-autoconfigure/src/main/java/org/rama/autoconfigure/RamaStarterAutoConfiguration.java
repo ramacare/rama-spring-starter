@@ -269,8 +269,8 @@ public class RamaStarterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    GenericEntityService genericEntityService(JsonMapper objectMapper) {
-        return new GenericEntityService(objectMapper);
+    GenericEntityService genericEntityService(JsonMapper objectMapper, EntityManager entityManager) {
+        return new GenericEntityService(objectMapper, entityManager);
     }
 
     @Bean
