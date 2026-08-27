@@ -8,6 +8,8 @@ import com.querydsl.core.types.dsl.PathBuilder;
 import com.querydsl.core.types.dsl.Wildcard;
 import com.querydsl.jpa.impl.JPAQuery;
 import graphql.GraphQLException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -34,6 +36,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GenericEntityService {
     private final JsonMapper mapper;
+
+    /**
+     * Used only to take the pessimistic lock in
+     * {@link #updateEntity(Class, BaseRepository, Serializable, Map)}. Every other path
+     * goes through the repository. See starter#41.
+     */
+    private final EntityManager entityManager;
 
     @Transactional
     public <T, ID extends Serializable> Optional<T> createEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
@@ -80,9 +89,38 @@ public class GenericEntityService {
         return createEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey, true), entityInput);
     }
 
+    /**
+     * Reads the row under {@link LockModeType#PESSIMISTIC_WRITE} so the {@code updatedAt}
+     * conflict check below is actually serialized.
+     *
+     * <p>The check is a hand-rolled optimistic-concurrency guard: the client echoes back
+     * the {@code updatedAt} it saw, and
+     * {@code GlobalAuditablePreUpdateListener} advances that column on every write. Read
+     * without a lock, two overlapping updaters both observe the same {@code updatedAt},
+     * both pass the check, and one write is silently lost — the row lock taken at the
+     * {@code UPDATE} serializes the writes, but it arrives long after the second caller
+     * made its decision on a stale read. Locking at the read closes that window: the
+     * second caller blocks until the first commits and then observes the advanced
+     * timestamp. See starter#41.
+     *
+     * <p>Deliberately {@code EntityManager.find} rather than a repository query: it uses
+     * the entity's real {@code @Id} whatever it is named, needs no change to
+     * {@link BaseRepository}, and leaves every read path lock-free.
+     * {@code SoftDeleteRepository} does not override {@code findById}, so no soft-delete
+     * filtering is bypassed by the switch.
+     *
+     * <p>One limit worth knowing: if a caller already loaded this entity earlier in the
+     * same transaction, {@code find} returns the instance from the persistence context
+     * and takes the lock without re-reading, so the check is only as fresh as that
+     * earlier read. The mutation entry points start their own transaction, so this is
+     * not the normal path.
+     *
+     * <p>The delete family is intentionally left unlocked — see
+     * {@link #deleteEntity(Class, BaseRepository, Serializable, String, Object)}.
+     */
     @Transactional
     public <T, ID extends Serializable> Optional<T> updateEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, Map<String, Object> entityInput) {
-        Optional<T> entity = entityRepository.findById(entityId);
+        Optional<T> entity = Optional.ofNullable(entityManager.find(entityClass, entityId, LockModeType.PESSIMISTIC_WRITE));
         T updatedEntity = null;
         if (entity.isPresent()) {
             try {
@@ -164,6 +202,18 @@ public class GenericEntityService {
         return deleteEntity(entityClass, entityRepository, extractEntityKey(entityInput, entityIdKey), statusCodeField, deleteValue);
     }
 
+    /**
+     * Reads without a lock, unlike
+     * {@link #updateEntity(Class, BaseRepository, Serializable, Map)}.
+     *
+     * <p>starter#41 left this open to decide during implementation. Deliberately
+     * unlocked: every delete variant funnels here, and none of them makes a
+     * read-derived decision that is written back — the read fetches the row, then either
+     * deletes it or sets one status field to a caller-supplied constant. There is no
+     * conflict check for a stale read to defeat, so a lock would buy no correctness and
+     * would widen the deadlock surface on a path every consumer uses. A delete racing an
+     * update stays last-write-wins, which is the usual semantic for deletes.
+     */
     @Transactional
     public <T, ID extends Serializable> Optional<T> deleteEntity(Class<T> entityClass, BaseRepository<T, ID> entityRepository, ID entityId, String statusCodeField, Object deleteValue) {
         Optional<T> entityOptional = entityRepository.findById(entityId);

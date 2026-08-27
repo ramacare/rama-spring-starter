@@ -1,5 +1,6 @@
 package org.rama.controller.system;
 
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,7 +35,7 @@ class SystemParameterControllerTest {
     @BeforeEach
     void setup() {
         GenericEntityService genericEntityService =
-                new GenericEntityService(JsonMapper.builder().build());
+                new GenericEntityService(JsonMapper.builder().build(), mock(EntityManager.class));
         systemParameterController =
                 new SystemParameterController(genericEntityService, systemParameterRepository);
     }

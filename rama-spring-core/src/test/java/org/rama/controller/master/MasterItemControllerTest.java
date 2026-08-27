@@ -1,5 +1,6 @@
 package org.rama.controller.master;
 
+import jakarta.persistence.EntityManager;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,7 +43,7 @@ class MasterItemControllerTest {
 
     @BeforeEach
     void setup() {
-        GenericEntityService genericEntityService = new GenericEntityService(JsonMapper.builder().build());
+        GenericEntityService genericEntityService = new GenericEntityService(JsonMapper.builder().build(), mock(EntityManager.class));
         masterItemController = new MasterItemController(genericEntityService, masterItemRepository, queryFactory, genericMongoServiceProvider);
     }
 
