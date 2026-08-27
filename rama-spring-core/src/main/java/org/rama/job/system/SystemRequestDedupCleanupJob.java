@@ -30,6 +30,15 @@ public class SystemRequestDedupCleanupJob extends SmartJob {
      */
     private final @Nullable SystemRequestDedupRepository repository;
 
+    /**
+     * The {@code @Transactional} here applies only when this bean is called through its
+     * proxy — which the integration tests do, but Quartz does not: it enters via
+     * {@code SmartJob.execute} and self-invokes down to here. The transaction the delete
+     * actually needs comes from
+     * {@link SystemRequestDedupRepository#deleteExpired(OffsetDateTime)}. Kept because it
+     * still gives the proxied path a single transaction. See starter#47 and
+     * {@link org.rama.job.SmartJob}.
+     */
     @Override
     @Transactional
     public void executeInternal(JobDataMap jobDataMap) {

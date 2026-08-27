@@ -24,6 +24,31 @@ Also worth knowing: `spring.jackson.time-zone` used to be silently ignored by th
 and now works, and overriding the `ObjectMapper` bean never replaced the mapper the starter's
 services use — override `JsonMapper`. See [Date/Time Frame](#datetime-frame) for the detail.
 
+### Upgrading past 4.3.3 — the idempotency cleanup job is actually scheduled now
+
+`system_request_dedup` was never evicted: `systemRequestDedupCleanupJobDetail` and
+`systemRequestDedupCleanupTrigger` were gated on a `Scheduler` bean by a condition that ran
+before Quartz had contributed one, so nothing was ever registered in the `rama-idempotency`
+trigger group. Both beans are now gated on the Quartz classes being present instead, which is
+order-independent. A second defect sat behind it: the delete itself threw
+`TransactionRequiredException` under Hibernate 7.2, because Quartz reaches the job by
+self-invocation and no transaction from the job applied.
+
+**Nothing to change on your side**, but two things to know:
+
+- **The table starts shrinking.** If it has been growing since you adopted idempotency, the job
+  will evict everything expired on its first run (every `cleanup-interval`, default `5m`). To
+  clear a large backlog up front rather than in one job run:
+  ```sql
+  DELETE FROM system_request_dedup WHERE expires_at < NOW();
+  ```
+- **Nothing was at risk while it was broken.** `lockAndExecute` treats an expired row as
+  re-runnable, so stale rows never replayed a response or blocked a request — the table simply
+  grew.
+
+Check `QRTZ_TRIGGERS` for a row in group `rama-idempotency` after upgrading to confirm it took.
+See starter#47.
+
 ### Upgrading past 4.3.2 — `rama.idempotency.default-ttl` now actually applies
 
 `@IdempotentMutation` used to default to a hardcoded `ttl = "30s"`, which meant
