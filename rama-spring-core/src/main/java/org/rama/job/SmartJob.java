@@ -15,6 +15,26 @@ import java.util.Collections;
 import java.util.Date;
 
 @Component
+/**
+ * Base class for the platform's Quartz jobs.
+ *
+ * <h2>{@code @Transactional} on {@code executeInternal} does not work</h2>
+ *
+ * <p>Quartz calls {@link #execute(JobExecutionContext)}, which reaches
+ * {@link #executeInternal(JobExecutionContext)} and in turn
+ * {@link #executeInternal(JobDataMap)} through {@code this}. Both hops are
+ * self-invocations, so they bypass the Spring proxy and a subclass's
+ * {@code @Transactional} never applies — whether or not the instance is proxied
+ * ({@code SpringBeanJobFactory} builds jobs via
+ * {@code AutowireCapableBeanFactory.createBean}, so one may well exist).
+ *
+ * <p>A subclass needing a transaction must obtain it somewhere a proxy is actually
+ * crossed: delegate to a {@code @Transactional} service bean, or annotate the repository
+ * method. Putting {@code @Transactional} on {@code executeInternal} produces a job that
+ * appears transactional, passes any test that calls the bean directly — such a call
+ * <em>does</em> go through the proxy — and silently runs without a transaction the moment
+ * Quartz fires it. See starter#47.
+ */
 public abstract class SmartJob implements Job {
     @Autowired
     protected SystemLogService systemLogService;
