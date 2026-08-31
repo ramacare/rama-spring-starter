@@ -116,7 +116,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
@@ -160,7 +159,6 @@ import java.util.concurrent.Executor;
         "org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration"
 })
 @EnableConfigurationProperties({RamaStarterProperties.class, RamaStarterLiquibaseProperties.class, AppProperties.class, MinioProperties.class, DocumentProperties.class, MeilisearchProperties.class, EncryptProperties.class, FtpProperties.class, IdempotencyProperties.class})
-@PropertySource(value = "classpath:rama-quartz-defaults.properties", ignoreResourceNotFound = true)
 @org.springframework.scheduling.annotation.EnableAsync
 public class RamaStarterAutoConfiguration {
     @Configuration(proxyBeanMethods = false)

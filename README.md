@@ -23,7 +23,8 @@ Add the dependency (published to GitHub Pages Maven repo):
         <version>4.0.1</version>
     </dependency>
 
-    <!-- Add your JDBC driver -->
+    <!-- Add your JDBC driver: H2, MySQL, PostgreSQL and SQL Server are all supported.
+         See docs/multi-database.md. -->
     <dependency>
         <groupId>com.microsoft.sqlserver</groupId>
         <artifactId>mssql-jdbc</artifactId>
@@ -43,6 +44,7 @@ encrypt.key=your-encryption-key
 
 - [Architecture Overview](./docs/overview.md)
 - [Consumer Integration Guide](./docs/consumer-manual.md)
+- [Supported databases](./docs/multi-database.md)
 - [Extension Points](./docs/extension-points.md)
 - [Publishing Guide](./docs/publishing.md)
 

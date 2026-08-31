@@ -14,7 +14,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
@@ -37,7 +36,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("integration")
 @SpringBootTest(properties = "rama.idempotency.default-ttl=7m")
-@ActiveProfiles("h2")
 @Import({IdempotencyDefaultTtlIT.TestMutation.class, IdempotencyDefaultTtlIT.ClockOverride.class})
 class IdempotencyDefaultTtlIT {
 

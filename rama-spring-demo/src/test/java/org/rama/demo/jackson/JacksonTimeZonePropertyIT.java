@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
-import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.OffsetDateTime;
@@ -26,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("integration")
 @SpringBootTest(properties = "spring.jackson.time-zone=America/New_York")
-@ActiveProfiles("h2")
 class JacksonTimeZonePropertyIT {
 
     /**

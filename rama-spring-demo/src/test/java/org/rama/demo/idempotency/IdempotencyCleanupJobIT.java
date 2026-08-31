@@ -10,7 +10,6 @@ import org.rama.job.system.SystemRequestDedupCleanupJob;
 import org.rama.repository.system.SystemRequestDedupRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.OffsetDateTime;
@@ -19,7 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 class IdempotencyCleanupJobIT {
 
     @Autowired SystemRequestDedupCleanupJob job;

@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
@@ -28,7 +27,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 @Import(AsyncUserstampProbeService.class)
 class AsyncUserstampPropagationIT {
 

@@ -1,0 +1,309 @@
+---
+# Convergence for databases created before starter#48.
+#
+# The per-`dbms` `<property>` overrides in the other changelogs were declared *after* the
+# unscoped default, so Liquibase discarded them and every engine got the generic type:
+#
+#   * SQL Server got `varchar(max)` where the entity field is `@Nationalized`, and every
+#     read of such a column fails with "The conversion from varchar to NCHAR is
+#     unsupported." SQL Server has never worked against a schema this changelog created.
+#   * MySQL got whole-second `timestamp`, which defeats the `updatedAt` conflict check in
+#     `GenericEntityService.updateEntity` (starter#41): two writers inside the same second
+#     read back an unchanged timestamp, both pass the check, one write is lost.
+#
+# Fresh installs get the right types from the reordered properties. These changesets bring
+# already-deployed schemas in line. They are no-ops on H2 and PostgreSQL.
+#
+# Each is written as raw SQL rather than `modifyDataType` because both engines drop the
+# nullability of a column when it is re-declared, and `modifyDataType` cannot restate it.
+databaseChangeLog:
+- changeSet:
+    id: rama-spring-portability-001-mssql-nationalized-master_group
+    author: claude
+    dbms: mssql
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: master_group
+    changes:
+    - sql:
+        sql: ALTER TABLE master_group ALTER COLUMN properties_template nvarchar(max) NULL
+    - sql:
+        sql: ALTER TABLE master_group ALTER COLUMN default_properties nvarchar(max) NULL
+- changeSet:
+    id: rama-spring-portability-002-mssql-nationalized-master_item
+    author: claude
+    dbms: mssql
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: master_item
+    changes:
+    - sql:
+        sql: ALTER TABLE master_item ALTER COLUMN properties nvarchar(max) NULL
+- changeSet:
+    id: rama-spring-portability-003-mssql-nationalized-system_log
+    author: claude
+    dbms: mssql
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: system_log
+    changes:
+    - sql:
+        sql: ALTER TABLE system_log ALTER COLUMN detail nvarchar(max) NULL
+- changeSet:
+    id: rama-spring-portability-004-mssql-nationalized-client_config
+    author: claude
+    dbms: mssql
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: client_config
+    changes:
+    - sql:
+        sql: ALTER TABLE client_config ALTER COLUMN configuration nvarchar(max) NULL
+- changeSet:
+    id: rama-spring-portability-005-mssql-nationalized-client_user_config
+    author: claude
+    dbms: mssql
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: client_user_config
+    changes:
+    - sql:
+        sql: ALTER TABLE client_user_config ALTER COLUMN configuration nvarchar(max) NULL
+- changeSet:
+    id: rama-spring-portability-006-mssql-nationalized-user_config
+    author: claude
+    dbms: mssql
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: user_config
+    changes:
+    - sql:
+        sql: ALTER TABLE user_config ALTER COLUMN configuration nvarchar(max) NULL
+- changeSet:
+    id: rama-spring-portability-007-mssql-nationalized-revision
+    author: claude
+    dbms: mssql
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: revision
+    changes:
+    - sql:
+        sql: ALTER TABLE revision ALTER COLUMN revision_data nvarchar(max) NOT NULL
+    - sql:
+        sql: ALTER TABLE revision ALTER COLUMN revision_change nvarchar(max) NULL
+- changeSet:
+    id: rama-spring-portability-101-mysql-timestamp-precision-api
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: api
+    changes:
+    - sql:
+        sql: ALTER TABLE api MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-102-mysql-timestamp-precision-api_header_set
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: api_header_set
+    changes:
+    - sql:
+        sql: ALTER TABLE api_header_set MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-103-mysql-timestamp-precision-asset_file
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: asset_file
+    changes:
+    - sql:
+        sql: ALTER TABLE asset_file MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-104-mysql-timestamp-precision-master_group
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: master_group
+    changes:
+    - sql:
+        sql: ALTER TABLE master_group MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-105-mysql-timestamp-precision-master_id
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: master_id
+    changes:
+    - sql:
+        sql: ALTER TABLE master_id MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-106-mysql-timestamp-precision-master_item
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: master_item
+    changes:
+    - sql:
+        sql: ALTER TABLE master_item MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-107-mysql-timestamp-precision-api_key
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: api_key
+    changes:
+    - sql:
+        sql: ALTER TABLE api_key MODIFY COLUMN expires_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN last_used_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-108-mysql-timestamp-precision-client_config
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: client_config
+    changes:
+    - sql:
+        sql: ALTER TABLE client_config MODIFY COLUMN last_seen_datetime TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-109-mysql-timestamp-precision-client_user_config
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: client_user_config
+    changes:
+    - sql:
+        sql: ALTER TABLE client_user_config MODIFY COLUMN last_seen_datetime TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-110-mysql-timestamp-precision-user_config
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: user_config
+    changes:
+    - sql:
+        sql: ALTER TABLE user_config MODIFY COLUMN last_seen_datetime TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-111-mysql-timestamp-precision-system_log
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: system_log
+    changes:
+    - sql:
+        sql: ALTER TABLE system_log MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-112-mysql-timestamp-precision-system_parameter
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: system_parameter
+    changes:
+    - sql:
+        sql: ALTER TABLE system_parameter MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-113-mysql-timestamp-precision-system_template
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: system_template
+    changes:
+    - sql:
+        sql: ALTER TABLE system_template MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL
+- changeSet:
+    id: rama-spring-portability-114-mysql-timestamp-precision-system_request_dedup
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: system_request_dedup
+    changes:
+    - sql:
+        sql: ALTER TABLE system_request_dedup MODIFY COLUMN created_at TIMESTAMP(6) NOT NULL, MODIFY COLUMN expires_at TIMESTAMP(6) NOT NULL
+- changeSet:
+    id: rama-spring-portability-115-mysql-timestamp-precision-revision
+    author: claude
+    dbms: mysql,mariadb
+    validCheckSum: ANY
+    preConditions:
+    - onFail: MARK_RAN
+    - onError: MARK_RAN
+    - tableExists:
+        tableName: revision
+    changes:
+    - sql:
+        sql: ALTER TABLE revision MODIFY COLUMN revision_datetime TIMESTAMP(6) NOT NULL, MODIFY COLUMN created_at TIMESTAMP(6) NULL DEFAULT NULL, MODIFY COLUMN updated_at TIMESTAMP(6) NULL DEFAULT NULL

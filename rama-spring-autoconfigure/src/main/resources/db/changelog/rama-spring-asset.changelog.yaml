@@ -1,20 +1,26 @@
 ---
 databaseChangeLog:
+# Liquibase keeps the FIRST definition of a property that is valid for the database it
+# is running against; a later definition of the same name is discarded, even a more
+# specific one. Every `dbms:`-scoped override must therefore be declared BEFORE the
+# unscoped default, or it is dead code. See starter#48.
+#
+# MySQL's bare `timestamp` is whole-second, which
+# silently defeats the updatedAt conflict check in GenericEntityService.updateEntity
+# (starter#41) — two writers inside the same second read back an unchanged timestamp and
+# both are accepted. Microseconds are what Hibernate binds, so ask for all six digits.
 - property:
     name: timestampType
-    value: timestamp
-- property:
-    name: timestampType
-    value: "datetime2(3)"
-    dbms: mssql
-- property:
-    name: timestampType
-    value: "datetime(3)"
+    value: "timestamp(6)"
     dbms: mysql,mariadb
 - property:
     name: timestampType
-    value: "timestamp(3)"
+    value: "timestamp(6)"
     dbms: postgresql
+# h2 -> TIMESTAMP(6), mssql -> datetime2(7); both already at or beyond microseconds.
+- property:
+    name: timestampType
+    value: timestamp
 - changeSet:
     id: rama-spring-asset-001-asset-file
     author: codex

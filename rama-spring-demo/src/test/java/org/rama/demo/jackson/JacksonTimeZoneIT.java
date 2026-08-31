@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
-import org.springframework.test.context.ActiveProfiles;
 import org.rama.service.GenericApiService;
 import org.rama.service.GenericEntityService;
 import org.rama.service.system.SystemLogService;
@@ -36,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 class JacksonTimeZoneIT {
 
     public static class Holder {

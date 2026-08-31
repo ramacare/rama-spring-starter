@@ -11,3 +11,5 @@ databaseChangeLog:
     file: db/changelog/rama-spring-security.changelog.yaml
 - include:
     file: db/changelog/rama-spring-idempotency.changelog.yaml
+- include:
+    file: db/changelog/rama-spring-portability.changelog.yaml

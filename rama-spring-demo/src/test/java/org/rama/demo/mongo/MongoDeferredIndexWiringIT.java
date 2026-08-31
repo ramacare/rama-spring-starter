@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.util.ReflectionUtils;
 
@@ -25,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 @TestPropertySource(properties = {
         "rama.mongo.enabled=true",
         "rama.mongo.deferred-indexes-enabled=true",

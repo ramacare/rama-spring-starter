@@ -7,14 +7,12 @@ import org.rama.entity.system.SystemTemplate;
 import org.rama.repository.system.SystemTemplateRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 @Transactional
 class SystemTemplateCodeNameIT {
 

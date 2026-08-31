@@ -100,6 +100,28 @@ condition, and fail loudly rather than backing off silently. `@AutoConfiguration
 not help there either: it orders auto-configurations against each other, and a consumer's registrar is
 not one.
 
+The same "too early to see it" trap catches **`@PropertySource` on an auto-configuration**. A
+`@PropertySource` only reaches the `Environment` when its configuration class is *parsed*, so it is
+invisible to every `PARSE_CONFIGURATION`-phase condition that runs earlier — including Boot's own.
+`spring.quartz.job-store-type=jdbc` used to ride on `@PropertySource` here and was never seen by
+`QuartzAutoConfiguration.JdbcStoreTypeConfiguration`'s `@ConditionalOnProperty`, so Quartz silently
+fell back to `RAMJobStore` and then died on the clustered `jobStore.*` defaults from the same file
+(those *do* arrive in time — `QuartzProperties` binds at bean-creation). `afterName` made it worse,
+not better. Default properties belong in an `EnvironmentPostProcessor` registered in
+`META-INF/spring.factories`, added with `addLast` so consumers still win. See
+`RamaQuartzDefaultsEnvironmentPostProcessor` and starter#49.
+
+**Databases.** H2, MySQL/MariaDB, PostgreSQL and SQL Server are all supported, and the demo's
+integration suite runs green on all four (`-Dspring.profiles.active=<engine>`). Read
+`docs/multi-database.md` before touching a changelog. Two rules that cost us starter#48:
+Liquibase keeps the **first** definition of a `<property>` valid for the running database and
+discards later ones, so every `dbms:`-scoped override must be declared **before** the unscoped
+default or it is dead code with no warning; and `${clobType}` must resolve to an N-type on SQL
+Server because eight starter entities annotate the matching field `@Nationalized` — a `varchar`
+column read through a nationalized mapping fails with *"The conversion from varchar to NCHAR is
+unsupported."* Any changeset using `${clobType}` or `${timestampType}` needs `validCheckSum: ANY`:
+the resolved value is part of the checksum.
+
 Jackson mappers are framed in the JVM default time zone, not Jackson's built-in UTC default. Every starter service injects **Boot's managed `JsonMapper`** (`jacksonJsonMapper`), framed via the `ramaStarterTimeZoneCustomizer` bean; the static mappers in `JsonConverter` and `JsonEncryptConverter` are framed the same way. `CanonicalJson` is deliberately pinned to UTC so idempotency hashes stay stable across deployments. `spring.jackson.time-zone` overrides the default — the starter's customizer is ordered `HIGHEST_PRECEDENCE` so Boot's own customizer runs after it and wins. Note `ramaStarterObjectMapper` is a fallback that does **not** register when Boot's Jackson auto-config is present; override `JsonMapper` to replace what the services use. See starter#39.
 
 **Feature flags** (all prefixed with `rama.`, default `true`):
