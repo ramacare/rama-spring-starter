@@ -3,3 +3,4 @@ org.rama.autoconfigure.RamaStarterAutoConfiguration
 org.rama.autoconfigure.RamaStarterSecurityAutoConfiguration
 org.rama.autoconfigure.RamaIdempotencyCorsAutoConfiguration
 org.rama.autoconfigure.RamaCorsAutoConfiguration
+org.rama.autoconfigure.quartz.RamaQuartzDriverDelegateAutoConfiguration

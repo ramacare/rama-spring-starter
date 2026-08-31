@@ -40,21 +40,16 @@ import java.util.Properties;
  * that auto-configuration ordering cannot put in place in time.
  *
  * <p>The property source is appended <em>last</em>, so anything the consumer sets — command line,
- * {@code application.properties}, config server — wins. Two further adjustments are made:
+ * {@code application.properties}, config server — wins. One adjustment is made on the way in: if
+ * the consumer has selected a non-JDBC job store, the JDBC-only defaults ({@code isClustered},
+ * {@code tablePrefix}, {@code lockHandler.class}) are withheld. {@code RAMJobStore} has no setter
+ * for them and Quartz refuses to start; because property layering can override a value but never
+ * remove one, a consumer previously had no way to ask for an in-memory scheduler at all.
  *
- * <ul>
- *   <li>If the consumer has selected a non-JDBC job store, the JDBC-only defaults
- *       ({@code isClustered}, {@code tablePrefix}, {@code lockHandler.class}) are withheld.
- *       {@code RAMJobStore} has no setter for them and Quartz refuses to start; because property
- *       layering can override a value but never remove one, a consumer previously had no way to
- *       ask for an in-memory scheduler at all.</li>
- *   <li>When the job store is JDBC and the JDBC URL is PostgreSQL, {@code driverDelegateClass}
- *       defaults to {@link org.quartz.impl.jdbcjobstore.PostgreSQLDelegate}. Quartz's
- *       {@code StdJDBCDelegate} reads {@code JOB_DATA} with {@code getBlob}, which on PostgreSQL
- *       means an OID large object; the starter's Quartz changelog provisions those columns as
- *       {@code BYTEA}, so the scheduler fails to store any job with
- *       {@code Bad value for type long : \xaced…}.</li>
- * </ul>
+ * <p>Choosing the JDBC driver delegate is <em>not</em> done here — that needs to know which engine
+ * the {@code DataSource} actually points at, which is a question for
+ * {@link RamaQuartzDriverDelegateAutoConfiguration}, not for a string match on a URL that may not
+ * even be in the environment yet.
  *
  * <p>Set {@code rama.quartz.apply-defaults=false} to contribute nothing at all.
  */
@@ -64,8 +59,6 @@ public class RamaQuartzDefaultsEnvironmentPostProcessor implements EnvironmentPo
     static final String ENABLED_PROPERTY = "rama.quartz.apply-defaults";
     static final String DEFAULTS_RESOURCE = "rama-quartz-defaults.properties";
     static final String JOB_STORE_TYPE = "spring.quartz.job-store-type";
-    static final String DELEGATE_PROPERTY = "spring.quartz.properties.org.quartz.jobStore.driverDelegateClass";
-    static final String POSTGRES_DELEGATE = "org.quartz.impl.jdbcjobstore.PostgreSQLDelegate";
 
     /**
      * Defaults that only make sense against the JDBC job store. {@code RAMJobStore} has no setter
@@ -104,11 +97,6 @@ public class RamaQuartzDefaultsEnvironmentPostProcessor implements EnvironmentPo
             for (String key : JDBC_ONLY_KEYS) {
                 defaults.remove(key);
             }
-        } else if (!environment.containsProperty(DELEGATE_PROPERTY)) {
-            String delegate = driverDelegateFor(environment.getProperty("spring.datasource.url"));
-            if (delegate != null) {
-                defaults.put(DELEGATE_PROPERTY, delegate);
-            }
         }
 
         // Last means lowest precedence: every consumer-supplied source is consulted first.
@@ -131,20 +119,10 @@ public class RamaQuartzDefaultsEnvironmentPostProcessor implements EnvironmentPo
         return defaults;
     }
 
-    /**
-     * @return the Quartz delegate the URL's engine needs, or {@code null} when
-     *         {@code StdJDBCDelegate} (Quartz's own default) is correct.
-     */
-    private String driverDelegateFor(String jdbcUrl) {
-        if (jdbcUrl == null) {
-            return null;
-        }
-        return jdbcUrl.startsWith("jdbc:postgresql:") ? POSTGRES_DELEGATE : null;
-    }
-
     @Override
     public int getOrder() {
-        // After Boot's own config-data processing so spring.datasource.url is already resolved.
+        // After Boot's own config-data processing, so a consumer's application.properties has
+        // already been loaded and `spring.quartz.job-store-type` reflects their choice.
         return Ordered.LOWEST_PRECEDENCE;
     }
 }

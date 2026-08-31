@@ -109,7 +109,11 @@ fell back to `RAMJobStore` and then died on the clustered `jobStore.*` defaults 
 (those *do* arrive in time — `QuartzProperties` binds at bean-creation). `afterName` made it worse,
 not better. Default properties belong in an `EnvironmentPostProcessor` registered in
 `META-INF/spring.factories`, added with `addLast` so consumers still win. See
-`RamaQuartzDefaultsEnvironmentPostProcessor` and starter#49.
+`RamaQuartzDefaultsEnvironmentPostProcessor` and starter#49. Its sibling
+`RamaQuartzDriverDelegateAutoConfiguration` shows the other half of the split: choosing the Quartz
+driver delegate needs the live `DataSource`, so it is a `SchedulerFactoryBeanCustomizer` on a
+top-level auto-configuration, reading `DatabaseMetaData` rather than string-matching a URL that may
+not be in the environment. Two different lifecycle phases, deliberately.
 
 **Databases.** H2, MySQL/MariaDB, PostgreSQL and SQL Server are all supported, and the demo's
 integration suite runs green on all four (`-Dspring.profiles.active=<engine>`). Read

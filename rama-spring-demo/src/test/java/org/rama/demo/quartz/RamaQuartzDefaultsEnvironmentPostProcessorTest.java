@@ -20,6 +20,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * therefore invisible and Quartz fell back to {@code RAMJobStore}. An
  * {@code EnvironmentPostProcessor} runs early enough; these tests pin the behaviour that made it
  * necessary.
+ *
+ * <p>Driver-delegate selection is not here: it depends on the live {@code DataSource}, so it lives
+ * in {@code RamaQuartzDriverDelegateAutoConfiguration} and is covered by
+ * {@link RamaQuartzDriverDelegateCustomizerTest}.
  */
 @Tag("unit")
 class RamaQuartzDefaultsEnvironmentPostProcessorTest {
@@ -38,44 +42,6 @@ class RamaQuartzDefaultsEnvironmentPostProcessorTest {
                 .isEqualTo("jdbc");
         assertThat(environment.getProperty("spring.quartz.properties.org.quartz.jobStore.isClustered"))
                 .isEqualTo("true");
-    }
-
-    @Test
-    void postProcess_whenUrlIsPostgres_selectsThePostgresDriverDelegate() {
-        StandardEnvironment environment = environmentWith(Map.of(
-                "spring.datasource.url", "jdbc:postgresql://localhost:5432/rama"));
-
-        processor.postProcessEnvironment(environment, null);
-
-        assertThat(environment.getProperty(
-                "spring.quartz.properties.org.quartz.jobStore.driverDelegateClass"))
-                .as("StdJDBCDelegate reads JOB_DATA with getBlob, which is an OID on PostgreSQL; "
-                        + "the changelog provisions BYTEA")
-                .isEqualTo("org.quartz.impl.jdbcjobstore.PostgreSQLDelegate");
-    }
-
-    @Test
-    void postProcess_whenUrlIsNotPostgres_leavesQuartzOnItsOwnDefaultDelegate() {
-        StandardEnvironment environment = environmentWith(Map.of(
-                "spring.datasource.url", "jdbc:sqlserver://localhost:1433;databaseName=rama"));
-
-        processor.postProcessEnvironment(environment, null);
-
-        assertThat(environment.getProperty(
-                "spring.quartz.properties.org.quartz.jobStore.driverDelegateClass")).isNull();
-    }
-
-    @Test
-    void postProcess_whenConsumerSetsADelegate_doesNotOverrideIt() {
-        StandardEnvironment environment = environmentWith(Map.of(
-                "spring.datasource.url", "jdbc:postgresql://localhost:5432/rama",
-                "spring.quartz.properties.org.quartz.jobStore.driverDelegateClass", "com.example.MyDelegate"));
-
-        processor.postProcessEnvironment(environment, null);
-
-        assertThat(environment.getProperty(
-                "spring.quartz.properties.org.quartz.jobStore.driverDelegateClass"))
-                .isEqualTo("com.example.MyDelegate");
     }
 
     @Test

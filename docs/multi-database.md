@@ -113,9 +113,12 @@ changelog; the starter never creates `QRTZ_*` tables on its own.
 
 * **PostgreSQL** stores `JOB_DATA` as `BYTEA` (the changelog's `blob_type` for that engine, since
   `BLOB` would mean an OID large object). Quartz's `StdJDBCDelegate` reads it with `getBlob`, so it
-  needs `PostgreSQLDelegate` instead — the starter selects that automatically from
-  `spring.datasource.url`. The symptom when it is missing is
-  `Bad value for type long : \xaced0005…`.
+  needs `PostgreSQLDelegate` instead. `RamaQuartzDriverDelegateAutoConfiguration` selects it via a
+  `SchedulerFactoryBeanCustomizer`, reading `DatabaseMetaData.getDatabaseProductName()` off the live
+  `DataSource` — not the JDBC URL, which may not be in the environment at all when the `DataSource`
+  is a bean or its URL comes from a config server. An explicit
+  `spring.quartz.properties.org.quartz.jobStore.driverDelegateClass` is never overwritten. The
+  symptom when it is missing is `Bad value for type long : \xaced0005…`.
 * **H2 in PostgreSQL mode** rejects `BLOB`; set `spring.liquibase.parameters.blob_type=BYTEA` and
   the PostgreSQL delegate by hand.
 * **In-memory scheduler**: `spring.quartz.job-store-type=memory` now works — the starter withholds
