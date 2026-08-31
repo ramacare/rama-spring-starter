@@ -141,7 +141,17 @@ Jackson mappers are framed in the JVM default time zone, not Jackson's built-in 
 - `rama.security.api-key.enabled` -- API key authentication filter
 
 **Quartz properties** (Spring Boot, not `rama.` prefix):
-- `spring.quartz.enabled` -- Enable/disable Quartz entirely (default `true`). Set to `false` to skip Quartz auto-config, `SchedulerController`, and `QuartzService`. Quartz schema (QRTZ_*) is NOT auto-created by the starter — consumers using the JDBC job store should `<include>` `db/changelog/rama-spring-quartz.changelog.xml` in their master changelog
+- There is **no `spring.quartz.enabled`**. It is not a Spring Boot property (grep the 4.0.3
+  configuration metadata) and the starter does not implement one, so setting it does nothing. To
+  turn Quartz off, exclude the auto-configuration:
+  `spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration`
+  — `SchedulerController` and `QuartzService` then back off with the `Scheduler` bean. For a
+  scheduler without a database, `spring.quartz.job-store-type=memory` now works (starter#49).
+- `spring.quartz.job-store-type` -- `jdbc` by default, contributed by
+  `RamaQuartzDefaultsEnvironmentPostProcessor`. Quartz schema (QRTZ_*) is NOT auto-created by the
+  starter — consumers using the JDBC job store should `<include>`
+  `db/changelog/rama-spring-quartz.changelog.xml` in their master changelog
+- `rama.quartz.apply-defaults` -- set `false` to contribute no Quartz defaults at all
 - The starter provides sensible defaults via `rama-quartz-defaults.properties`: JDBC job-store, clustered mode, `QRTZ_` table prefix, 5 threads. Consumers can override any of these in their `application.properties`
 - `SchedulerController` is conditionally loaded only when `QuartzService` bean exists (which requires a `Scheduler` bean from Quartz auto-config)
 
