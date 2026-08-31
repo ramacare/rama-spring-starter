@@ -13,13 +13,19 @@
 # `rama-spring-starter-master.yaml` and ahead of your own tables:
 #
 #     databaseChangeLog:
-#       - include: { file: db/changelog/_dbms-types.yaml }   # <- first
+#       - include: { file: db/changelog/rama-spring-dbms-types.yaml }   # <- first
 #       - include: { file: db/changelog/rama-spring-starter-master.yaml }
 #       - include: { file: db/changelog/yourTable.yaml }
 #
 # Including it later is not an error, it is just ineffective for everything already parsed. If you
 # keep your own copy of this file, include yours first and the starter's values back off — same
 # rule, working in your favour.
+#
+# NAME. `rama-spring-` prefixed, like every other changelog here, because a consumer's file and a
+# starter file that share a classpath path do not merge or shadow — Liquibase refuses to start:
+# "Found 2 files with the path 'db/changelog/_dbms-types.yaml'". ramaservice and his-service both
+# already ship `_dbms-types.yaml`, so that is the one name this file must not have. Keep the prefix
+# on anything new in this directory.
 databaseChangeLog:
 # clobType backs every column whose entity field carries @Nationalized. On SQL Server it must be an
 # N-type: reading a varchar column through a nationalized mapping fails at runtime with

@@ -69,13 +69,20 @@ Consumers should put it at the very top of their own master changelog, ahead of 
 
 ```yaml
 databaseChangeLog:
-  - include: { file: db/changelog/_dbms-types.yaml }              # first
+  - include: { file: db/changelog/rama-spring-dbms-types.yaml }   # first
   - include: { file: db/changelog/rama-spring-starter-master.yaml }
   - include: { file: db/changelog/yourTable.yaml }
 ```
 
-That one line covers your tables as well as the starter's. If you keep your own copy of the file,
-include yours first and the starter's values back off — same rule, working in your favour.
+That one line covers your tables as well as the starter's.
+
+**Keep your own `_dbms-types.yaml` if you want to override anything** — include yours first and the
+starter's values back off, same rule working in your favour. The two files coexist because the
+names differ, and that is not cosmetic: Liquibase does not merge or shadow two changelogs that
+resolve to the same classpath path, it refuses to start with
+`Found 2 files with the path 'db/changelog/_dbms-types.yaml'`. ramaservice and his-service both ship
+that filename already, which is why the starter's is `rama-spring-`-prefixed like every other
+changelog it publishes. Anything new in that directory needs the prefix too.
 
 Rule 2 is not hypothetical. Before starter#48 the definitions were inlined in each starter
 changelog in the wrong order, and what happened to a consumer depended entirely on where it

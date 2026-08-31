@@ -2,7 +2,7 @@ databaseChangeLog:
 # FIRST, always: Liquibase keeps the first definition of a parameter it sees, so these have to be
 # registered before any changelog that uses ${clobType} / ${timestampType}. See starter#48.
 - include:
-    file: db/changelog/_dbms-types.yaml
+    file: db/changelog/rama-spring-dbms-types.yaml
 - include:
     file: db/changelog/rama-spring-api.changelog.yaml
 - include:

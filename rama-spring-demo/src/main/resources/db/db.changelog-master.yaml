@@ -1,10 +1,14 @@
 databaseChangeLog:
-  # FIRST, ahead of everything — including the starter's own master. Liquibase parameters are
-  # global to a run and the first definition valid for the running database wins, so this is what
-  # makes ${clobType} / ${timestampType} resolve correctly for the starter's tables AND for ours.
-  # Include it later and it is silently ineffective for whatever was already parsed. See starter#48.
+  # This demo's own override slot — empty, but included first so the ordering is the one consumers
+  # should copy. See the file for why it deliberately uses the colliding name.
   - include:
       file: db/changelog/_dbms-types.yaml
+  # Then the starter's types, still ahead of everything that uses ${clobType} / ${timestampType}.
+  # Liquibase parameters are global to a run and the first definition valid for the running database
+  # wins, so this has to precede the starter's master AND our own tables. Include it later and it is
+  # silently ineffective for whatever was already parsed. See starter#48.
+  - include:
+      file: db/changelog/rama-spring-dbms-types.yaml
   - include:
       file: db/changelog/rama-spring-starter-master.yaml
   - include:
