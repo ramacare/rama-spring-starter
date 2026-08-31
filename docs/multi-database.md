@@ -61,6 +61,27 @@ Two constraints drive those choices:
 `rama-spring-portability.changelog.yaml` brings databases created before starter#48 in line. It is
 a no-op on H2 and PostgreSQL.
 
+Its **SQL Server half covers only `user_config` and `client_user_config`.** Every other
+`@Nationalized` column was converted to `NVARCHAR(MAX)` upstream, before those tables moved into the
+starter — ramaservice's `upgrade/*.yaml` carries `ensure-<table>-type-<column>` changesets for
+`master_group`, `master_item`, `system_log`, `client_config`, `system_template` and
+`system_parameter`, and `revision` was converted by `revision.xml` changeset 4 in July 2025. Once a
+table exists the starter's `createTable` is skipped by its `NOT tableExists` precondition, so the
+wrong type never reached a running database. `user_config` and `client_user_config` never existed in
+ramaservice, so the starter is the only thing that has ever created them and nothing converged them.
+
+A SQL Server database *first created by the starter* — a new consumer, or an environment stood up
+after the 2026-03-30 extraction — would need the other five too. Check with:
+
+```sql
+SELECT t.name, c.name, ty.name FROM sys.columns c
+JOIN sys.tables t ON t.object_id = c.object_id
+JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+WHERE ty.name = 'varchar' AND c.max_length = -1
+  AND t.name IN ('master_group','master_item','system_log','client_config','user_config',
+                 'client_user_config','revision');
+```
+
 ## Quartz
 
 The starter contributes `spring.quartz.job-store-type=jdbc` and the clustered `jobStore.*` defaults

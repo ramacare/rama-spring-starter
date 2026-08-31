@@ -6,7 +6,7 @@
 #
 #   * SQL Server got `varchar(max)` where the entity field is `@Nationalized`, and every
 #     read of such a column fails with "The conversion from varchar to NCHAR is
-#     unsupported." SQL Server has never worked against a schema this changelog created.
+#     unsupported."
 #   * MySQL got whole-second `timestamp`, which defeats the `updatedAt` conflict check in
 #     `GenericEntityService.updateEntity` (starter#41): two writers inside the same second
 #     read back an unchanged timestamp, both pass the check, one write is lost.
@@ -14,63 +14,23 @@
 # Fresh installs get the right types from the reordered properties. These changesets bring
 # already-deployed schemas in line. They are no-ops on H2 and PostgreSQL.
 #
+# SCOPE OF THE SQL SERVER HALF -- only `user_config` and `client_user_config`.
+# Every other `@Nationalized` column was already converted to NVARCHAR(MAX) before those
+# tables became the starter's: ramaservice carries `ensure-<table>-type-<column>` changesets
+# in `upgrade/*.yaml` for master_group, master_item, system_log, client_config,
+# system_template and system_parameter, and `revision` was converted by revision.xml
+# changeset 4 (2025-07-26) before that file moved into the starter. Once those tables exist,
+# the starter's own `createTable` is skipped by its `NOT tableExists` precondition, so the
+# wrong type never reached a running database. `user_config` and `client_user_config` are the
+# exception: they never existed in ramaservice, so nothing upstream ever converged them and
+# the starter is the only thing that has ever created them.
+#
+# A SQL Server database first created by the starter (a new consumer, or an environment stood
+# up after 2026-03-30) would need the other five as well -- re-add them here if that turns up.
+#
 # Each is written as raw SQL rather than `modifyDataType` because both engines drop the
 # nullability of a column when it is re-declared, and `modifyDataType` cannot restate it.
 databaseChangeLog:
-- changeSet:
-    id: rama-spring-portability-001-mssql-nationalized-master_group
-    author: claude
-    dbms: mssql
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: master_group
-    changes:
-    - sql:
-        sql: ALTER TABLE master_group ALTER COLUMN properties_template nvarchar(max) NULL
-    - sql:
-        sql: ALTER TABLE master_group ALTER COLUMN default_properties nvarchar(max) NULL
-- changeSet:
-    id: rama-spring-portability-002-mssql-nationalized-master_item
-    author: claude
-    dbms: mssql
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: master_item
-    changes:
-    - sql:
-        sql: ALTER TABLE master_item ALTER COLUMN properties nvarchar(max) NULL
-- changeSet:
-    id: rama-spring-portability-003-mssql-nationalized-system_log
-    author: claude
-    dbms: mssql
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: system_log
-    changes:
-    - sql:
-        sql: ALTER TABLE system_log ALTER COLUMN detail nvarchar(max) NULL
-- changeSet:
-    id: rama-spring-portability-004-mssql-nationalized-client_config
-    author: claude
-    dbms: mssql
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: client_config
-    changes:
-    - sql:
-        sql: ALTER TABLE client_config ALTER COLUMN configuration nvarchar(max) NULL
 - changeSet:
     id: rama-spring-portability-005-mssql-nationalized-client_user_config
     author: claude
@@ -97,21 +57,6 @@ databaseChangeLog:
     changes:
     - sql:
         sql: ALTER TABLE user_config ALTER COLUMN configuration nvarchar(max) NULL
-- changeSet:
-    id: rama-spring-portability-007-mssql-nationalized-revision
-    author: claude
-    dbms: mssql
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: revision
-    changes:
-    - sql:
-        sql: ALTER TABLE revision ALTER COLUMN revision_data nvarchar(max) NOT NULL
-    - sql:
-        sql: ALTER TABLE revision ALTER COLUMN revision_change nvarchar(max) NULL
 - changeSet:
     id: rama-spring-portability-101-mysql-timestamp-precision-api
     author: claude
