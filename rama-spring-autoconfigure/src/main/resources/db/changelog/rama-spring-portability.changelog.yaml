@@ -1,105 +1,26 @@
 ---
-# Convergence for databases created before starter#48.
+# Widens MySQL/MariaDB timestamp columns created before starter#48.
 #
-# The per-`dbms` `<property>` overrides in the other changelogs were declared *after* the
-# unscoped default, so Liquibase discarded them and every engine got the generic type:
+# The per-`dbms` `<property>` overrides used to be declared *after* the unscoped default, so
+# Liquibase discarded them and MySQL got bare `timestamp` -- whole-second. That defeats the
+# `updatedAt` conflict check in `GenericEntityService.updateEntity` (starter#41): two writers inside
+# the same second read back an unchanged timestamp, both pass the check, and one write is lost.
 #
-#   * SQL Server got `varchar(max)` where the entity field is `@Nationalized`, and every
-#     read of such a column fails with "The conversion from varchar to NCHAR is
-#     unsupported."
-#   * MySQL got whole-second `timestamp`, which defeats the `updatedAt` conflict check in
-#     `GenericEntityService.updateEntity` (starter#41): two writers inside the same second
-#     read back an unchanged timestamp, both pass the check, one write is lost.
+# Fresh databases need none of this -- `_dbms-types.yaml` gives `CREATE TABLE` `timestamp(6)`.
+# These changesets widen schemas that already exist. `dbms: mysql,mariadb` makes them no-ops
+# everywhere else.
 #
-# Fresh installs get the right types from the reordered properties. These changesets bring
-# already-deployed schemas in line. They are no-ops on H2 and PostgreSQL.
+# NO SQL SERVER HALF. `${clobType}` resolving to `varchar(max)` instead of `nvarchar(max)` breaks
+# every read of an `@Nationalized` column, but it never reached a running SQL Server database:
+# ramaservice includes its own correctly-ordered `_dbms-types.yaml` from `upgrade/api.yaml`, and
+# `includeAll: upgrade/` is parsed *before* `rama-spring-starter-master.yaml` -- so its
+# `nvarchar(max)` was registered first and won for the whole run, the starter's tables included.
+# The same first-definition-wins rule that caused the defect is what shielded the only SQL Server
+# consumer from it. his-service, whose copy is included too late to win, runs on MySQL.
 #
-# SCOPE OF THE SQL SERVER HALF -- only `user_config` and `client_user_config`, and even those
-# are guarded: the changeset checks `sys.types` first and does nothing when the column is already
-# NVARCHAR. The team has confirmed both are already NVARCHAR(MAX) across our databases, so on our
-# fleet these are pure no-ops; they are kept for any environment nobody has looked at, and for
-# consumers outside this group.
-#
-# Every other `@Nationalized` column was converted before those tables became the starter's:
-# ramaservice carries `ensure-<table>-type-<column>` changesets in `upgrade/*.yaml` for
-# master_group, master_item, system_log, client_config, system_template and system_parameter, and
-# `revision` was converted by revision.xml changeset 4 (2025-07-26) before that file moved into the
-# starter. Once those tables exist, the starter's own `createTable` is skipped by its
-# `NOT tableExists` precondition, so the wrong type never reached a running database. `user_config`
-# and `client_user_config` never existed in ramaservice -- the starter is the only thing that has
-# ever created them -- which is why they are the two listed here.
-#
-# Fresh databases need none of this: the reordered properties give `CREATE TABLE` the right type.
-#
-# Each is written as raw SQL rather than `modifyDataType` because both engines drop the
-# nullability of a column when it is re-declared, and `modifyDataType` cannot restate it.
+# Written as raw SQL rather than `modifyDataType` because MySQL drops a column's nullability when
+# the column is re-declared, and `modifyDataType` cannot restate it.
 databaseChangeLog:
-- changeSet:
-    id: rama-spring-portability-mssql-ensure-client_user_config-type-configuration
-    author: claude
-    dbms: mssql
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: client_user_config
-    - columnExists:
-        tableName: client_user_config
-        columnName: configuration
-    - sqlCheck:
-        expectedResult: '1'
-        sql: |
-          SELECT CASE
-                   WHEN EXISTS (
-                     SELECT 1
-                     FROM sys.columns c
-                     JOIN sys.tables t ON c.object_id = t.object_id
-                     JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-                     WHERE t.name = 'client_user_config'
-                       AND c.name = 'configuration'
-                       AND ty.name <> 'nvarchar'
-                   ) THEN 1
-                   ELSE 0
-                 END
-    changes:
-    - sql:
-        splitStatements: false
-        sql: |
-          ALTER TABLE client_user_config ALTER COLUMN configuration NVARCHAR(MAX) NULL;
-- changeSet:
-    id: rama-spring-portability-mssql-ensure-user_config-type-configuration
-    author: claude
-    dbms: mssql
-    validCheckSum: ANY
-    preConditions:
-    - onFail: MARK_RAN
-    - onError: MARK_RAN
-    - tableExists:
-        tableName: user_config
-    - columnExists:
-        tableName: user_config
-        columnName: configuration
-    - sqlCheck:
-        expectedResult: '1'
-        sql: |
-          SELECT CASE
-                   WHEN EXISTS (
-                     SELECT 1
-                     FROM sys.columns c
-                     JOIN sys.tables t ON c.object_id = t.object_id
-                     JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-                     WHERE t.name = 'user_config'
-                       AND c.name = 'configuration'
-                       AND ty.name <> 'nvarchar'
-                   ) THEN 1
-                   ELSE 0
-                 END
-    changes:
-    - sql:
-        splitStatements: false
-        sql: |
-          ALTER TABLE user_config ALTER COLUMN configuration NVARCHAR(MAX) NULL;
 - changeSet:
     id: rama-spring-portability-101-mysql-timestamp-precision-api
     author: claude

@@ -113,14 +113,19 @@ not better. Default properties belong in an `EnvironmentPostProcessor` registere
 
 **Databases.** H2, MySQL/MariaDB, PostgreSQL and SQL Server are all supported, and the demo's
 integration suite runs green on all four (`-Dspring.profiles.active=<engine>`). Read
-`docs/multi-database.md` before touching a changelog. Two rules that cost us starter#48:
-Liquibase keeps the **first** definition of a `<property>` valid for the running database and
-discards later ones, so every `dbms:`-scoped override must be declared **before** the unscoped
-default or it is dead code with no warning; and `${clobType}` must resolve to an N-type on SQL
-Server because eight starter entities annotate the matching field `@Nationalized` — a `varchar`
-column read through a nationalized mapping fails with *"The conversion from varchar to NCHAR is
-unsupported."* Any changeset using `${clobType}` or `${timestampType}` needs `validCheckSum: ANY`:
-the resolved value is part of the checksum.
+`docs/multi-database.md` before touching a changelog. Column types live in **one** file,
+`db/changelog/_dbms-types.yaml`, included as the first entry of `rama-spring-starter-master.yaml` —
+never inline a `<property>` block into an individual changelog again. Liquibase keeps the **first**
+definition of a property valid for the running database and discards later ones, which bites twice:
+inside the file, every `dbms:`-scoped override must precede the unscoped default or it is dead code
+with no warning; and across files, parameters are global to the run, so an early changelog with the
+wrong order poisons the parameter for everything parsed after it — a consumer's own correct
+definitions included. Consumers should include `_dbms-types.yaml` at the top of their master
+changelog, ahead of the starter's. `${clobType}` must resolve to an N-type on SQL Server because
+eight starter entities annotate the matching field `@Nationalized` — a `varchar` column read
+through a nationalized mapping fails with *"The conversion from varchar to NCHAR is unsupported."*
+Any changeset using `${clobType}` or `${timestampType}` needs `validCheckSum: ANY`: the resolved
+value is part of the checksum. See starter#48.
 
 Jackson mappers are framed in the JVM default time zone, not Jackson's built-in UTC default. Every starter service injects **Boot's managed `JsonMapper`** (`jacksonJsonMapper`), framed via the `ramaStarterTimeZoneCustomizer` bean; the static mappers in `JsonConverter` and `JsonEncryptConverter` are framed the same way. `CanonicalJson` is deliberately pinned to UTC so idempotency hashes stay stable across deployments. `spring.jackson.time-zone` overrides the default — the starter's customizer is ordered `HIGHEST_PRECEDENCE` so Boot's own customizer runs after it and wins. Note `ramaStarterObjectMapper` is a fallback that does **not** register when Boot's Jackson auto-config is present; override `JsonMapper` to replace what the services use. See starter#39.
 

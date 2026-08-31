@@ -34,12 +34,8 @@ constraint — so drop and recreate the schema between runs on a persistent engi
 
 ## What the changelogs do per engine
 
-Column types come from two Liquibase properties declared at the top of every starter changelog.
-
-> **Ordering rule.** Liquibase keeps the **first** definition of a property that is valid for the
-> database it is running against, and discards later ones — including more specific ones. Every
-> `dbms:`-scoped override must be declared **before** the unscoped default. Getting this backwards
-> is silent: you get the generic type on every engine and nothing is logged (starter#48).
+Column types come from **one shared file**, `db/changelog/_dbms-types.yaml`, shipped in the starter
+and included as the first entry of `rama-spring-starter-master.yaml`.
 
 | Property | mssql | mysql/mariadb | postgresql | h2 |
 |---|---|---|---|---|
@@ -58,29 +54,44 @@ Two constraints drive those choices:
   writers inside the same second both read an unchanged value, both pass the check, and one write
   is lost.
 
-`rama-spring-portability.changelog.yaml` brings databases created before starter#48 in line. It is
-a no-op on H2 and PostgreSQL.
+### Two ordering rules, and both bite silently
 
-Its **SQL Server half covers only `user_config` and `client_user_config`.** Every other
-`@Nationalized` column was converted to `NVARCHAR(MAX)` upstream, before those tables moved into the
-starter — ramaservice's `upgrade/*.yaml` carries `ensure-<table>-type-<column>` changesets for
-`master_group`, `master_item`, `system_log`, `client_config`, `system_template` and
-`system_parameter`, and `revision` was converted by `revision.xml` changeset 4 in July 2025. Once a
-table exists the starter's `createTable` is skipped by its `NOT tableExists` precondition, so the
-wrong type never reached a running database. `user_config` and `client_user_config` never existed in
-ramaservice, so the starter is the only thing that has ever created them and nothing converged them.
+> **1. Within the file: `dbms:`-scoped definitions come before the unscoped default.** Liquibase
+> keeps the **first** definition of a property that is valid for the database it is running
+> against, and discards later ones — including more specific ones. Backwards, you get the generic
+> type on every engine and nothing is logged.
 
-A SQL Server database *first created by the starter* — a new consumer, or an environment stood up
-after the 2026-03-30 extraction — would need the other five too. Check with:
+> **2. Across files: include `_dbms-types.yaml` first.** Parameters are global to a Liquibase run,
+> so whichever definition is parsed first wins for everything parsed afterwards, across file
+> boundaries. Include it later and it is silently ineffective for whatever was already parsed.
 
-```sql
-SELECT t.name, c.name, ty.name FROM sys.columns c
-JOIN sys.tables t ON t.object_id = c.object_id
-JOIN sys.types ty ON ty.user_type_id = c.user_type_id
-WHERE ty.name = 'varchar' AND c.max_length = -1
-  AND t.name IN ('master_group','master_item','system_log','client_config','user_config',
-                 'client_user_config','revision');
+Consumers should put it at the very top of their own master changelog, ahead of the starter's:
+
+```yaml
+databaseChangeLog:
+  - include: { file: db/changelog/_dbms-types.yaml }              # first
+  - include: { file: db/changelog/rama-spring-starter-master.yaml }
+  - include: { file: db/changelog/yourTable.yaml }
 ```
+
+That one line covers your tables as well as the starter's. If you keep your own copy of the file,
+include yours first and the starter's values back off — same rule, working in your favour.
+
+Rule 2 is not hypothetical. Before starter#48 the definitions were inlined in each starter
+changelog in the wrong order, and what happened to a consumer depended entirely on where it
+included things:
+
+* **ramaservice** was unaffected. Its `includeAll: db/changelog/upgrade/` is parsed *before*
+  `rama-spring-starter-master.yaml`, and `upgrade/api.yaml` includes a correctly-ordered
+  `_dbms-types.yaml` — so `nvarchar(max)` was registered first and won for the whole run, the
+  starter's own tables included. The rule that caused the defect is what shielded it.
+* **his-service** was not. Its copy is included from table changelogs at master lines 22+, long
+  after the starter's block at line 10, so the generic types won for everything. It runs on MySQL,
+  where the consequence is the timestamp precision loss rather than the SQL Server read failure.
+
+`rama-spring-portability.changelog.yaml` widens MySQL timestamp columns in databases created before
+starter#48. It carries no SQL Server half, for the reason above — no SQL Server database ever
+received the wrong type. Fresh databases need neither: `_dbms-types.yaml` gets `CREATE TABLE` right.
 
 ## Quartz
 
