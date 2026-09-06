@@ -1,0 +1,13 @@
+---
+# Deliberately named `_dbms-types.yaml` — the name ramaservice and his-service both use.
+#
+# It exists to keep the starter honest about resource-path collisions. Liquibase does not merge or
+# shadow two changelogs that resolve to the same classpath path; it refuses to start:
+# "Found 2 files with the path 'db/changelog/_dbms-types.yaml'". If anyone renames the starter's
+# `rama-spring-dbms-types.yaml` back to this name, every consumer that ships its own copy breaks on
+# upgrade — and this demo breaks first, in CI.
+#
+# It defines no shared property on purpose: the demo must keep exercising the starter's own values.
+# A consumer that wants to override them puts real definitions here instead, and — because this is
+# included ahead of rama-spring-starter-master.yaml — the starter's values back off.
+databaseChangeLog: []

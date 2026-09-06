@@ -6,7 +6,6 @@ import org.rama.demo.entity.book.Book;
 import org.rama.demo.repository.book.BookRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,7 +13,6 @@ import static org.mockito.Mockito.mock;
 
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 class BookAuditJobIT {
 
     @Autowired BookAuditJob job;

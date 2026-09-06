@@ -1,20 +1,5 @@
 ---
 databaseChangeLog:
-- property:
-    name: timestampType
-    value: timestamp
-- property:
-    name: timestampType
-    value: "datetime2(3)"
-    dbms: mssql
-- property:
-    name: timestampType
-    value: "datetime(3)"
-    dbms: mysql,mariadb
-- property:
-    name: timestampType
-    value: "timestamp(3)"
-    dbms: postgresql
 - changeSet:
     id: rama-spring-asset-001-asset-file
     author: codex

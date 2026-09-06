@@ -100,6 +100,37 @@ condition, and fail loudly rather than backing off silently. `@AutoConfiguration
 not help there either: it orders auto-configurations against each other, and a consumer's registrar is
 not one.
 
+The same "too early to see it" trap catches **`@PropertySource` on an auto-configuration**. A
+`@PropertySource` only reaches the `Environment` when its configuration class is *parsed*, so it is
+invisible to every `PARSE_CONFIGURATION`-phase condition that runs earlier — including Boot's own.
+`spring.quartz.job-store-type=jdbc` used to ride on `@PropertySource` here and was never seen by
+`QuartzAutoConfiguration.JdbcStoreTypeConfiguration`'s `@ConditionalOnProperty`, so Quartz silently
+fell back to `RAMJobStore` and then died on the clustered `jobStore.*` defaults from the same file
+(those *do* arrive in time — `QuartzProperties` binds at bean-creation). `afterName` made it worse,
+not better. Default properties belong in an `EnvironmentPostProcessor` registered in
+`META-INF/spring.factories`, added with `addLast` so consumers still win. See
+`RamaQuartzDefaultsEnvironmentPostProcessor` and starter#49. Its sibling
+`RamaQuartzDriverDelegateAutoConfiguration` shows the other half of the split: choosing the Quartz
+driver delegate needs the live `DataSource`, so it is a `SchedulerFactoryBeanCustomizer` on a
+top-level auto-configuration, reading `DatabaseMetaData` rather than string-matching a URL that may
+not be in the environment. Two different lifecycle phases, deliberately.
+
+**Databases.** H2, MySQL/MariaDB, PostgreSQL and SQL Server are all supported, and the demo's
+integration suite runs green on all four (`-Dspring.profiles.active=<engine>`). Read
+`docs/multi-database.md` before touching a changelog. Column types live in **one** file,
+`db/changelog/_dbms-types.yaml`, included as the first entry of `rama-spring-starter-master.yaml` —
+never inline a `<property>` block into an individual changelog again. Liquibase keeps the **first**
+definition of a property valid for the running database and discards later ones, which bites twice:
+inside the file, every `dbms:`-scoped override must precede the unscoped default or it is dead code
+with no warning; and across files, parameters are global to the run, so an early changelog with the
+wrong order poisons the parameter for everything parsed after it — a consumer's own correct
+definitions included. Consumers should include `_dbms-types.yaml` at the top of their master
+changelog, ahead of the starter's. `${clobType}` must resolve to an N-type on SQL Server because
+eight starter entities annotate the matching field `@Nationalized` — a `varchar` column read
+through a nationalized mapping fails with *"The conversion from varchar to NCHAR is unsupported."*
+Any changeset using `${clobType}` or `${timestampType}` needs `validCheckSum: ANY`: the resolved
+value is part of the checksum. See starter#48.
+
 Jackson mappers are framed in the JVM default time zone, not Jackson's built-in UTC default. Every starter service injects **Boot's managed `JsonMapper`** (`jacksonJsonMapper`), framed via the `ramaStarterTimeZoneCustomizer` bean; the static mappers in `JsonConverter` and `JsonEncryptConverter` are framed the same way. `CanonicalJson` is deliberately pinned to UTC so idempotency hashes stay stable across deployments. `spring.jackson.time-zone` overrides the default — the starter's customizer is ordered `HIGHEST_PRECEDENCE` so Boot's own customizer runs after it and wins. Note `ramaStarterObjectMapper` is a fallback that does **not** register when Boot's Jackson auto-config is present; override `JsonMapper` to replace what the services use. See starter#39.
 
 **Feature flags** (all prefixed with `rama.`, default `true`):
@@ -119,7 +150,17 @@ Jackson mappers are framed in the JVM default time zone, not Jackson's built-in 
 - `rama.security.api-key.enabled` -- API key authentication filter
 
 **Quartz properties** (Spring Boot, not `rama.` prefix):
-- `spring.quartz.enabled` -- Enable/disable Quartz entirely (default `true`). Set to `false` to skip Quartz auto-config, `SchedulerController`, and `QuartzService`. Quartz schema (QRTZ_*) is NOT auto-created by the starter — consumers using the JDBC job store should `<include>` `db/changelog/rama-spring-quartz.changelog.xml` in their master changelog
+- There is **no `spring.quartz.enabled`**. It is not a Spring Boot property (grep the 4.0.3
+  configuration metadata) and the starter does not implement one, so setting it does nothing. To
+  turn Quartz off, exclude the auto-configuration:
+  `spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration`
+  — `SchedulerController` and `QuartzService` then back off with the `Scheduler` bean. For a
+  scheduler without a database, `spring.quartz.job-store-type=memory` now works (starter#49).
+- `spring.quartz.job-store-type` -- `jdbc` by default, contributed by
+  `RamaQuartzDefaultsEnvironmentPostProcessor`. Quartz schema (QRTZ_*) is NOT auto-created by the
+  starter — consumers using the JDBC job store should `<include>`
+  `db/changelog/rama-spring-quartz.changelog.xml` in their master changelog
+- `rama.quartz.apply-defaults` -- set `false` to contribute no Quartz defaults at all
 - The starter provides sensible defaults via `rama-quartz-defaults.properties`: JDBC job-store, clustered mode, `QRTZ_` table prefix, 5 threads. Consumers can override any of these in their `application.properties`
 - `SchedulerController` is conditionally loaded only when `QuartzService` bean exists (which requires a `Scheduler` bean from Quartz auto-config)
 

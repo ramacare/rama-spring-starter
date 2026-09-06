@@ -126,7 +126,9 @@ See starter#47.
         <version>4.0.1</version>
     </dependency>
 
-    <!-- Your JDBC driver -->
+    <!-- Your JDBC driver. H2, MySQL/MariaDB, PostgreSQL and SQL Server are supported and
+         verified against the demo's integration suite — see docs/multi-database.md for the
+         per-engine notes (Quartz driver delegate, Liquibase type mapping, portable indexes). -->
     <dependency>
         <groupId>com.microsoft.sqlserver</groupId>
         <artifactId>mssql-jdbc</artifactId>

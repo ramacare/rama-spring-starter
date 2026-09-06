@@ -1,0 +1,61 @@
+---
+# Shared per-DBMS column types for every starter changelog, and for consumers.
+#
+# ORDERING IS LOAD-BEARING. Liquibase keeps the FIRST definition of a property that is valid for
+# the database it is running against and discards every later one, even a more specific one. So the
+# `dbms:`-scoped values must come BEFORE the unqualified default, or they are dead code and every
+# engine silently gets the generic type. That is starter#48; before it these definitions lived
+# inlined in each changelog, in the wrong order.
+#
+# The same rule makes WHERE THIS FILE IS INCLUDED matter. Parameters are global to a Liquibase run,
+# so whichever definition is parsed first wins for everything parsed afterwards — across file
+# boundaries. Include this as the FIRST entry of your master changelog, ahead of
+# `rama-spring-starter-master.yaml` and ahead of your own tables:
+#
+#     databaseChangeLog:
+#       - include: { file: db/changelog/rama-spring-dbms-types.yaml }   # <- first
+#       - include: { file: db/changelog/rama-spring-starter-master.yaml }
+#       - include: { file: db/changelog/yourTable.yaml }
+#
+# Including it later is not an error, it is just ineffective for everything already parsed. If you
+# keep your own copy of this file, include yours first and the starter's values back off — same
+# rule, working in your favour.
+#
+# NAME. `rama-spring-` prefixed, like every other changelog here, because a consumer's file and a
+# starter file that share a classpath path do not merge or shadow — Liquibase refuses to start:
+# "Found 2 files with the path 'db/changelog/_dbms-types.yaml'". ramaservice and his-service both
+# already ship `_dbms-types.yaml`, so that is the one name this file must not have. Keep the prefix
+# on anything new in this directory.
+databaseChangeLog:
+# clobType backs every column whose entity field carries @Nationalized. On SQL Server it must be an
+# N-type: reading a varchar column through a nationalized mapping fails at runtime with
+# "The conversion from varchar to NCHAR is unsupported."
+- property:
+    name: clobType
+    value: "nvarchar(max)"
+    dbms: mssql
+- property:
+    name: clobType
+    value: longtext
+    dbms: mysql,mariadb
+# h2 -> CLOB, postgresql -> text
+- property:
+    name: clobType
+    value: clob
+# MySQL's bare `timestamp` is whole-second, which silently defeats the updatedAt conflict check in
+# GenericEntityService.updateEntity (starter#41) — two writers inside the same second read back an
+# unchanged timestamp and both are accepted. Microseconds are what Hibernate binds, so ask for all
+# six digits. `timestamp` rather than `datetime` keeps the base type already deployed, so widening
+# an existing column is a pure precision change.
+- property:
+    name: timestampType
+    value: "timestamp(6)"
+    dbms: mysql,mariadb
+- property:
+    name: timestampType
+    value: "timestamp(6)"
+    dbms: postgresql
+# h2 -> TIMESTAMP(6), mssql -> datetime2(7); both already at or beyond microseconds.
+- property:
+    name: timestampType
+    value: timestamp

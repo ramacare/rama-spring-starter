@@ -8,7 +8,6 @@ import org.rama.repository.system.SystemRequestDedupRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.OffsetDateTime;
 
@@ -25,8 +24,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * scheduled in the first place.
  */
 @Tag("integration")
-@SpringBootTest
-@ActiveProfiles("h2")
+@SpringBootTest(properties = "spring.autoconfigure.exclude="
+        + "org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration")
 class IdempotencyCleanupWiringIT {
 
     @Autowired ApplicationContext context;
@@ -36,11 +35,13 @@ class IdempotencyCleanupWiringIT {
      * The beans used to be gated on a {@code Scheduler} bean, and the gate never matched,
      * so nothing was ever scheduled.
      *
-     * <p>This demo deliberately excludes {@code QuartzAutoConfiguration} (see
-     * {@code application.properties}), so there is no {@code Scheduler} here at all — which
-     * is precisely why the original defect went unnoticed, and precisely what makes this a
-     * useful assertion: the beans must exist on the strength of the Quartz classes being on
-     * the classpath, not on a scheduler having been wired.
+     * <p>This test excludes {@code QuartzAutoConfiguration} for its own context, so there is
+     * no {@code Scheduler} here at all — which is precisely why the original defect went
+     * unnoticed, and precisely what makes this a useful assertion: the beans must exist on
+     * the strength of the Quartz classes being on the classpath, not on a scheduler having
+     * been wired. The exclusion is declared here rather than in the demo's
+     * {@code application.properties} so the rest of the suite exercises a real JDBC-backed
+     * scheduler.
      */
     @Test
     void cleanupJobDetailAndTrigger_areRegisteredWithoutASchedulerBean() {

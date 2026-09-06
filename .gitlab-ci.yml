@@ -64,6 +64,66 @@ maven_integration_test:
       junit:
         - "*/target/failsafe-reports/TEST-*.xml"
 
+# Multi-database matrix. The default pipeline runs the demo's integration suite against H2 only;
+# these jobs re-run it against the other three supported engines. Manual because they need a
+# runner that can start `services:` containers, and allow_failure so a runner without that
+# capability cannot redden an otherwise-good pipeline. See docs/multi-database.md.
+.db_matrix:
+  stage: integration-test
+  script:
+    - mvn $MAVEN_CLI_OPTS -DskipTests install
+    - mvn $MAVEN_CLI_OPTS -pl rama-spring-demo verify
+        -Dspring.profiles.active=$DEMO_DB_PROFILE
+        -Dspring.datasource.hikari.maximum-pool-size=3
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - when: manual
+  allow_failure: true
+  tags:
+    - dkrunner-20-217-tag
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - "*/target/failsafe-reports/TEST-*.xml"
+
+integration_test_postgres:
+  extends: .db_matrix
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    DEMO_DB_PROFILE: postgres
+    DB_HOST: postgres
+    POSTGRES_DB: rama_demo
+    POSTGRES_PASSWORD: R@ma2025
+
+integration_test_mysql:
+  extends: .db_matrix
+  services:
+    - name: mysql:8.4
+      alias: mysql
+  variables:
+    DEMO_DB_PROFILE: mysql
+    DB_HOST: mysql
+    MYSQL_DATABASE: rama_demo
+    MYSQL_ROOT_PASSWORD: R@ma2025
+
+integration_test_mssql:
+  extends: .db_matrix
+  services:
+    - name: mcr.microsoft.com/mssql/server:2022-latest
+      alias: mssql
+  variables:
+    DEMO_DB_PROFILE: mssql
+    DB_HOST: mssql
+    ACCEPT_EULA: "Y"
+    MSSQL_SA_PASSWORD: R@ma2025
+    # SQL Server does not create a database from env; the demo connects to master and
+    # Liquibase provisions into it.
+    DB_NAME: master
+
 publish:
   stage: deploy
   script:

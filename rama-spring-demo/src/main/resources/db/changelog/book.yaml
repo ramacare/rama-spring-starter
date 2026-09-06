@@ -2,6 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: 20260416-001-book
       author: claude
+      validCheckSum: ANY
       preConditions:
         - onFail: MARK_RAN
         - not:
@@ -51,14 +52,45 @@ databaseChangeLog:
                   type: ${timestampType}
         - createIndex:
             tableName: book
+            indexName: ix_book__status_code
+            columns:
+              - column:
+                  name: status_code
+  # isbn is nullable, and SQL Server treats NULLs as equal in a unique index: only ONE row may
+  # have a NULL isbn, where H2/MySQL/PostgreSQL allow any number. Most of the demo's fixtures
+  # create books without an isbn, so the plain unique index makes the second insert fail with
+  # "Cannot insert duplicate key ... The duplicate key value is (<NULL>)". A filtered index
+  # gives SQL Server the same semantics as the other three. See starter#50.
+  - changeSet:
+      id: 20260416-003-book-isbn-unique
+      author: claude
+      validCheckSum: ANY
+      dbms: '!mssql'
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            indexExists:
+              tableName: book
+              indexName: ux_book__isbn
+      changes:
+        - createIndex:
+            tableName: book
             indexName: ux_book__isbn
             unique: true
             columns:
               - column:
                   name: isbn
-        - createIndex:
-            tableName: book
-            indexName: ix_book__status_code
-            columns:
-              - column:
-                  name: status_code
+  - changeSet:
+      id: 20260416-004-book-isbn-unique-mssql
+      author: claude
+      validCheckSum: ANY
+      dbms: mssql
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            indexExists:
+              tableName: book
+              indexName: ux_book__isbn
+      changes:
+        - sql:
+            sql: CREATE UNIQUE INDEX ux_book__isbn ON book (isbn) WHERE isbn IS NOT NULL

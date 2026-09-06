@@ -1,34 +1,12 @@
 ---
 databaseChangeLog:
-- property:
-    name: clobType
-    value: clob
-- property:
-    name: clobType
-    value: "nvarchar(max)"
-    dbms: mssql
-- property:
-    name: clobType
-    value: longtext
-    dbms: mysql,mariadb
-- property:
-    name: timestampType
-    value: timestamp
-- property:
-    name: timestampType
-    value: "datetime2(3)"
-    dbms: mssql
-- property:
-    name: timestampType
-    value: "datetime(3)"
-    dbms: mysql,mariadb
-- property:
-    name: timestampType
-    value: "timestamp(3)"
-    dbms: postgresql
 - changeSet:
     id: rama-spring-security-001-api-key
     author: rama-spring-starter
+    # Every other starter changeset carries this. Without it, resolving ${clobType} to a
+    # different value per database (starter#48) changes the stored checksum and Liquibase
+    # refuses to run against an existing schema.
+    validCheckSum: ANY
     preConditions:
     - onFail: MARK_RAN
     - not:

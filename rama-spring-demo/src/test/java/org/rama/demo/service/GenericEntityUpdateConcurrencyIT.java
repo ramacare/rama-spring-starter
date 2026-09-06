@@ -8,7 +8,6 @@ import org.rama.demo.repository.book.BookRepository;
 import org.rama.service.GenericEntityService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.OffsetDateTime;
@@ -40,7 +39,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 class GenericEntityUpdateConcurrencyIT {
 
     @Autowired GenericEntityService genericEntityService;

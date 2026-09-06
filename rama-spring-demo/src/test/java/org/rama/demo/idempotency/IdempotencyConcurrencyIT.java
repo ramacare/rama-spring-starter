@@ -13,7 +13,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
@@ -30,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("integration")
 @SpringBootTest
-@ActiveProfiles("h2")
 @Import({IdempotencyConcurrencyIT.TestMutation.class, IdempotencyConcurrencyIT.ClockOverride.class})
 class IdempotencyConcurrencyIT {
 
