@@ -37,6 +37,11 @@ public class ClientUserConfigController {
         return clientUserConfigRepository.findAll();
     }
 
+    @QueryMapping
+    public Optional<ClientUserConfig> clientUserConfigById(@Argument Long id) {
+        return clientUserConfigRepository.findById(id);
+    }
+
     @MutationMapping(name = "createClientUserConfig")
     public Optional<ClientUserConfig> createEntity(@Argument Map<String, Object> input) {
         return genericEntityService.createEntity(ClientUserConfig.class, clientUserConfigRepository, input, "id");
