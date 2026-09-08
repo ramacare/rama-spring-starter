@@ -15,6 +15,7 @@ import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,6 +25,17 @@ public class ClientUserConfigController {
     private final GenericEntityService genericEntityService;
     private final ClientUserConfigRepository clientUserConfigRepository;
     private final ClientUserConfigService clientUserConfigService;
+
+    /**
+     * Explicit resolver for the bare list query -- see the identical note on
+     * {@link ClientConfigController#clientConfig()}. {@code ClientUserConfig.configuration}
+     * has the same {@code new HashMap<>()} default, so the bare {@code clientUserConfig} query
+     * was equally exposed to starter#51 via Spring's Querydsl/QBE auto-registration.
+     */
+    @QueryMapping
+    public List<ClientUserConfig> clientUserConfig() {
+        return clientUserConfigRepository.findAll();
+    }
 
     @MutationMapping(name = "createClientUserConfig")
     public Optional<ClientUserConfig> createEntity(@Argument Map<String, Object> input) {

@@ -15,6 +15,7 @@ import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,6 +25,21 @@ public class ClientConfigController {
     private final GenericEntityService genericEntityService;
     private final ClientConfigRepository clientConfigRepository;
     private final ClientConfigService clientConfigService;
+
+    /**
+     * Explicit resolver for the bare list query -- deliberately NOT left to Spring for
+     * GraphQL's Querydsl/Query-by-Example auto-registration (which otherwise claims any
+     * unmapped query field returning {@code [ClientConfig]}). Auto-registration builds its
+     * implicit filter from a fresh {@code new ClientConfig()} probe, and {@code configuration}
+     * defaults to {@code new HashMap<>()} rather than {@code null} -- Spring Data's
+     * {@code ExampleMatcher} only ignores null probe properties, so every row is silently
+     * filtered down to "configuration equals {}" and any row with a real configuration
+     * (e.g. right after {@code updateClientConfig}) drops out of the result. See starter#51.
+     */
+    @QueryMapping
+    public List<ClientConfig> clientConfig() {
+        return clientConfigRepository.findAll();
+    }
 
     @MutationMapping(name = "createClientConfig")
     public Optional<ClientConfig> createEntity(@Argument Map<String, Object> input) {
