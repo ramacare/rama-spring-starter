@@ -1,5 +1,6 @@
 extend type Query {
     clientUserConfig: [ClientUserConfig]
+    clientUserConfigById(id: ID!): ClientUserConfig
     clientUserConfigPageable(pageable: PageableInput!): ClientUserConfigPage
     clientUserConfigByExamplePageable(example: ClientUserConfigExample, pageable: PageableInput!): ClientUserConfigPage
     clientUserConfigByClientUsername(clientUsername: String!): ClientUserConfig
