@@ -20,7 +20,17 @@ import java.util.Map;
 @NoArgsConstructor
 @TrackRevision
 @SyncToMongo(mongoClass = org.rama.mongo.document.MasterItem.class, mapperClass = MongoMasterItemMapper.class)
-@SyncToMeilisearch(filterableAttributes = {"groupKey", "filterText", "statusCode"})
+@SyncToMeilisearch(
+        // Split by groupKey ($ICD10, $ICD9, $SNOMEDCT, $COMPOSITE, ...): typo tolerance and
+        // synonyms differ per groupKey (e.g. the rt/lt/ca/fx/hx/tx dictionary only makes sense for
+        // $SNOMEDCT), which a single shared index can't express -- Meilisearch has no
+        // per-document-filtered typo tolerance or synonym setting. filterableAttributes stays here
+        // since every split index needs the same three fields filterable. Per-groupKey tuning
+        // (typoTolerance, synonyms, ...) is added via a MeilisearchIndexSettingsResolver bean for
+        // that groupKey, layered over this base -- see MeilisearchIndexSettingsResolver.
+        filterableAttributes = {"groupKey", "filterText", "statusCode"},
+        indexNameField = "groupKey"
+)
 public class MasterItem implements Auditable {
     @Id
     @Column(updatable = false, nullable = false)
