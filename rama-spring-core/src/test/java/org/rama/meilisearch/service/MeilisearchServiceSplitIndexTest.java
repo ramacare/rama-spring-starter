@@ -131,6 +131,10 @@ class MeilisearchServiceSplitIndexTest {
         verify(index).updateSynonymsSettings(captor.capture());
         assertThat(captor.getValue()).containsOnlyKeys("rt");
         assertThat(captor.getValue().get("rt")).containsExactly("right");
+
+        // The resolver only overrode synonyms -- filterableAttributes still comes from
+        // SplitByCategoryEntity's own @SyncToMeilisearch, layered underneath rather than dropped.
+        verify(index).updateFilterableAttributesSettings(new String[]{"category"});
     }
 
     @Test
@@ -139,10 +143,11 @@ class MeilisearchServiceSplitIndexTest {
 
         service.sync(new SplitByCategoryEntity("1", "$SNOMEDCT", "n1"));
 
-        // SplitByCategoryEntity's own @SyncToMeilisearch declares no settings at all, so nothing
-        // beyond get-or-create should happen -- no settings-update calls of any kind.
+        // SplitByCategoryEntity's own @SyncToMeilisearch declares filterableAttributes -- that
+        // still applies with no resolver in play -- but nothing else, so no other settings-update
+        // calls happen.
+        verify(index).updateFilterableAttributesSettings(new String[]{"category"});
         verify(index, never()).updateSearchableAttributesSettings(any());
-        verify(index, never()).updateFilterableAttributesSettings(any());
         verify(index, never()).updateSynonymsSettings(any());
     }
 }

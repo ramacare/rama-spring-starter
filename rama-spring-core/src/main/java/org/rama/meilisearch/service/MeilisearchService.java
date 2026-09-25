@@ -123,16 +123,17 @@ public class MeilisearchService {
     }
 
     private MeilisearchIndexSettings resolveSplitIndexSettings(Class<?> entityClass, SyncToMeilisearch annotation, String splitFieldValue) {
+        MeilisearchIndexSettings base = MeilisearchIndexSettings.fromAnnotation(annotation);
         for (MeilisearchIndexSettingsResolver resolver : settingsResolvers) {
             if (resolver.supports(entityClass)) {
                 MeilisearchIndexSettings resolved = resolver.resolve(entityClass, splitFieldValue);
-                if (resolved != null) {
-                    return resolved;
-                }
-                break;
+                // Layered, not replaced: a resolver overriding just synonyms for one split value
+                // must not silently drop filterableAttributes (or anything else) the annotation
+                // declares for every index of this entity -- see MeilisearchIndexSettings#layeredOver.
+                return resolved == null ? base : resolved.layeredOver(base);
             }
         }
-        return MeilisearchIndexSettings.fromAnnotation(annotation);
+        return base;
     }
 
     public <T> TaskInfo addDocuments(String indexName, T entity) throws Exception {

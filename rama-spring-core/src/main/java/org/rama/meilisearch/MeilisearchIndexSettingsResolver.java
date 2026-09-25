@@ -22,8 +22,14 @@ public interface MeilisearchIndexSettingsResolver {
      * value of the entity's {@code @SyncToMeilisearch(indexNameField = ...)} field, e.g.
      * {@code "$SNOMEDCT"} for a {@code MasterItem} split on {@code groupKey}.
      *
-     * @return the settings to apply, or {@code null} to fall back to {@code entityClass}'s own
-     * {@code @SyncToMeilisearch} settings for this particular value
+     * <p>A non-{@code null} result is layered on top of {@code entityClass}'s own
+     * {@code @SyncToMeilisearch} settings (see {@link MeilisearchIndexSettings#layeredOver}), not
+     * a full replacement -- override only what's different for {@code splitFieldValue} (e.g. just
+     * {@code synonyms}); every other setting the annotation declares still applies to this index
+     * without needing to repeat it here.
+     *
+     * @return the settings to layer over {@code entityClass}'s own {@code @SyncToMeilisearch}
+     * settings, or {@code null} to use those unmodified for this particular value
      */
     MeilisearchIndexSettings resolve(Class<?> entityClass, String splitFieldValue);
 }

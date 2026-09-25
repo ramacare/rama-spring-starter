@@ -67,4 +67,29 @@ public class MeilisearchIndexSettings {
         }
         return builder.build();
     }
+
+    /**
+     * {@code this} layered on top of {@code base}, field by field: a field {@code this} leaves at
+     * its "untouched" default (empty array/map, or {@code null}) falls through to {@code base}'s
+     * value for that same field instead of clearing it.
+     *
+     * <p>Without this, a {@link MeilisearchIndexSettingsResolver} that overrides one setting (say
+     * {@code synonyms}) for one split value would silently drop every <em>other</em> setting the
+     * entity's own {@code @SyncToMeilisearch} declares for that index (e.g.
+     * {@code filterableAttributes}, needed for every search filter to keep working) -- a resolver
+     * would have to remember to repeat the whole annotation in every branch it writes. Call this
+     * as {@code resolverResult.layeredOver(MeilisearchIndexSettings.fromAnnotation(annotation))}.
+     */
+    public MeilisearchIndexSettings layeredOver(MeilisearchIndexSettings base) {
+        return MeilisearchIndexSettings.builder()
+                .searchableAttributes(searchableAttributes.length > 0 ? searchableAttributes : base.searchableAttributes)
+                .filterableAttributes(filterableAttributes.length > 0 ? filterableAttributes : base.filterableAttributes)
+                .sortableAttributes(sortableAttributes.length > 0 ? sortableAttributes : base.sortableAttributes)
+                .rankingRules(rankingRules.length > 0 ? rankingRules : base.rankingRules)
+                .typoToleranceEnabled(typoToleranceEnabled != null ? typoToleranceEnabled : base.typoToleranceEnabled)
+                .typoToleranceMinWordSizeOneTypo(typoToleranceMinWordSizeOneTypo != null ? typoToleranceMinWordSizeOneTypo : base.typoToleranceMinWordSizeOneTypo)
+                .typoToleranceMinWordSizeTwoTypos(typoToleranceMinWordSizeTwoTypos != null ? typoToleranceMinWordSizeTwoTypos : base.typoToleranceMinWordSizeTwoTypos)
+                .synonyms(!synonyms.isEmpty() ? synonyms : base.synonyms)
+                .build();
+    }
 }
