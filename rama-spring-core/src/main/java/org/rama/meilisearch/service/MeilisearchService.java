@@ -12,6 +12,10 @@ import com.meilisearch.sdk.model.TaskInfo;
 import com.meilisearch.sdk.model.TaskStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.rama.annotation.SyncToMeilisearch;
+import org.rama.meilisearch.MeilisearchIndexSettings;
+import org.rama.meilisearch.MeilisearchIndexSettingsApplier;
+import org.rama.meilisearch.MeilisearchIndexSettingsResolver;
+import org.rama.meilisearch.MeilisearchIndexes;
 import org.rama.meilisearch.mapper.IMeilisearchMapper;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.annotation.Async;
@@ -24,6 +28,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 public class MeilisearchService {
@@ -31,18 +37,35 @@ public class MeilisearchService {
     private final Client meilisearchClient;
     private final JsonMapper objectMapper;
     private final MeilisearchErrorHandler errorHandler;
+    private final List<MeilisearchIndexSettingsResolver> settingsResolvers;
+
+    /** Split index names already created and settings-applied this JVM run (see
+     * {@link SyncToMeilisearch#indexNameField()}) -- a plain entity never touches this, since its
+     * one index is initialized eagerly at startup by {@code MeilisearchIndexInitializer} instead. */
+    private final Set<String> ensuredSplitIndexNames = ConcurrentHashMap.newKeySet();
 
     public MeilisearchService(ApplicationContext context, Client meilisearchClient, JsonMapper objectMapper, MeilisearchErrorHandler errorHandler) {
+        this(context, meilisearchClient, objectMapper, errorHandler, List.of());
+    }
+
+    public MeilisearchService(ApplicationContext context, Client meilisearchClient, JsonMapper objectMapper,
+                               MeilisearchErrorHandler errorHandler, List<MeilisearchIndexSettingsResolver> settingsResolvers) {
         this.context = context;
         this.meilisearchClient = meilisearchClient;
         this.objectMapper = objectMapper;
         this.errorHandler = errorHandler;
+        this.settingsResolvers = settingsResolvers;
     }
 
     @Async
     public <T> void sync(T entity) {
         try {
-            TaskInfo taskInfo = addDocuments(resolveIndexName(entity.getClass()), entity);
+            String splitFieldValue = readSplitFieldValue(entity);
+            String indexName = indexNameFor(entity.getClass(), splitFieldValue);
+            if (splitFieldValue != null) {
+                ensureSplitIndexInitialized(entity.getClass(), indexName, splitFieldValue);
+            }
+            TaskInfo taskInfo = addDocuments(indexName, entity);
             meilisearchClient.waitForTask(taskInfo.getTaskUid());
             Task task = meilisearchClient.getTask(taskInfo.getTaskUid());
             if (task != null && task.getStatus() == TaskStatus.FAILED) {
@@ -51,6 +74,65 @@ public class MeilisearchService {
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    /** The index a specific entity instance belongs to -- the same as
+     * {@link #resolveIndexName(Class)} for a plain entity, or that plus the entity's own
+     * (sanitized) {@code @SyncToMeilisearch(indexNameField = ...)} field value for a split one. */
+    public String resolveIndexName(Object entity) {
+        return indexNameFor(entity.getClass(), readSplitFieldValue(entity));
+    }
+
+    /** The named field's raw value off {@code entity}, or {@code null} for a plain (unsplit)
+     * entity -- {@code entity.getClass()}'s annotation names no {@code indexNameField}, or names
+     * one that's currently {@code null} on this particular instance. */
+    private String readSplitFieldValue(Object entity) {
+        SyncToMeilisearch annotation = entity.getClass().getAnnotation(SyncToMeilisearch.class);
+        if (annotation == null || annotation.indexNameField().isEmpty()) {
+            return null;
+        }
+        String fieldName = annotation.indexNameField();
+        try {
+            Field field = entity.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            Object value = field.get(entity);
+            return value == null ? null : value.toString();
+        } catch (NoSuchFieldException | IllegalAccessException ex) {
+            throw new IllegalStateException("@SyncToMeilisearch(indexNameField = \"" + fieldName
+                    + "\") on " + entity.getClass().getSimpleName() + " does not name a readable field", ex);
+        }
+    }
+
+    private String indexNameFor(Class<?> entityClass, String splitFieldValue) {
+        String base = resolveIndexName(entityClass);
+        return splitFieldValue == null ? base : base + "_" + sanitize(splitFieldValue);
+    }
+
+    /** Ensures the split index named {@code indexName} exists and carries the right settings; a
+     * no-op past the first call for any given index name, since Meilisearch already carries
+     * whatever settings that first call applied. */
+    private void ensureSplitIndexInitialized(Class<?> entityClass, String indexName, String splitFieldValue) throws MeilisearchException {
+        if (!ensuredSplitIndexNames.add(indexName)) {
+            return; // already ensured this run.
+        }
+        SyncToMeilisearch annotation = entityClass.getAnnotation(SyncToMeilisearch.class);
+        String primaryKey = resolvePrimaryKey(entityClass);
+        Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
+        MeilisearchIndexSettings settings = resolveSplitIndexSettings(entityClass, annotation, splitFieldValue);
+        MeilisearchIndexSettingsApplier.apply(index, settings);
+    }
+
+    private MeilisearchIndexSettings resolveSplitIndexSettings(Class<?> entityClass, SyncToMeilisearch annotation, String splitFieldValue) {
+        for (MeilisearchIndexSettingsResolver resolver : settingsResolvers) {
+            if (resolver.supports(entityClass)) {
+                MeilisearchIndexSettings resolved = resolver.resolve(entityClass, splitFieldValue);
+                if (resolved != null) {
+                    return resolved;
+                }
+                break;
+            }
+        }
+        return MeilisearchIndexSettings.fromAnnotation(annotation);
     }
 
     public <T> TaskInfo addDocuments(String indexName, T entity) throws Exception {
@@ -81,10 +163,21 @@ public class MeilisearchService {
         return meilisearchClient.index(indexName).search(searchRequest).getHits();
     }
 
-    @SuppressWarnings("unchecked")
+    /** Only correct for a plain (unsplit) entity -- a split entity (see
+     * {@link SyncToMeilisearch#indexNameField()}) has no single index to search across every
+     * split-field value; use {@link #search(Class, String, SearchRequest)} instead. */
     public <T> ArrayList<HashMap<String, Object>> search(Class<T> clazz, SearchRequest searchRequest) throws MeilisearchException {
-        String indexName = resolveIndexName(clazz);
-        String key = resolvePrimaryKey(clazz);
+        return searchIndex(resolveIndexName(clazz), resolvePrimaryKey(clazz), searchRequest);
+    }
+
+    /** Searches the one split index that {@code splitFieldValue} resolves to -- see
+     * {@link SyncToMeilisearch#indexNameField()}. */
+    public <T> ArrayList<HashMap<String, Object>> search(Class<T> clazz, String splitFieldValue, SearchRequest searchRequest) throws MeilisearchException {
+        return searchIndex(indexNameFor(clazz, splitFieldValue), resolvePrimaryKey(clazz), searchRequest);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ArrayList<HashMap<String, Object>> searchIndex(String indexName, String key, SearchRequest searchRequest) throws MeilisearchException {
         Searchable searchable = meilisearchClient.index(indexName).search(searchRequest);
         ArrayList<HashMap<String, Object>> hits = searchable.getHits();
         for (HashMap<String, Object> hit : hits) {

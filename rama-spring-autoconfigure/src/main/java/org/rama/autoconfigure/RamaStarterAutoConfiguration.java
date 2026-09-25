@@ -46,6 +46,7 @@ import org.rama.listener.global.GlobalPostInsertRevisionListener;
 import org.rama.listener.global.GlobalPostUpdateEntityEventListener;
 import org.rama.listener.global.GlobalPostUpdateRevisionListener;
 import org.rama.meilisearch.MeilisearchIndexInitializer;
+import org.rama.meilisearch.MeilisearchIndexSettingsResolver;
 import org.rama.meilisearch.listener.GlobalPostInsertMeilisearchListener;
 import org.rama.meilisearch.listener.GlobalPostUpdateMeilisearchListener;
 import org.rama.meilisearch.mapper.DefaultMeilisearchMapper;
@@ -800,8 +801,9 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(Client.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.meilisearch", name = "enabled", havingValue = "true", matchIfMissing = true)
-    MeilisearchService meilisearchService(ApplicationContext applicationContext, Client client, JsonMapper objectMapper, MeilisearchErrorHandler errorHandler) {
-        return new MeilisearchService(applicationContext, client, objectMapper, errorHandler);
+    MeilisearchService meilisearchService(ApplicationContext applicationContext, Client client, JsonMapper objectMapper,
+                                           MeilisearchErrorHandler errorHandler, List<MeilisearchIndexSettingsResolver> settingsResolvers) {
+        return new MeilisearchService(applicationContext, client, objectMapper, errorHandler, settingsResolvers);
     }
 
     @Bean
