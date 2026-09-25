@@ -2,6 +2,7 @@ package org.rama.meilisearch;
 
 import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Index;
+import com.meilisearch.sdk.model.TypoTolerance;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -9,14 +10,17 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.rama.annotation.SyncToMeilisearch;
 import org.rama.entity.master.MasterItem;
 import org.rama.meilisearch.service.MeilisearchService;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,6 +54,8 @@ class MeilisearchIndexInitializerTest {
         // lands in once documents have been written but settings never applied.
         when(index.getFilterableAttributesSettings()).thenReturn(new String[0]);
         when(index.getSearchableAttributesSettings()).thenReturn(new String[0]);
+        when(index.getSortableAttributesSettings()).thenReturn(new String[0]);
+        when(index.getRankingRulesSettings()).thenReturn(new String[0]);
 
         return new MeilisearchIndexInitializer(client, meilisearchService, basePackages);
     }
@@ -91,5 +97,78 @@ class MeilisearchIndexInitializerTest {
         initializer.initializeIndexes();
 
         verify(index, never()).updateFilterableAttributesSettings(any());
+    }
+
+    // ---- sortableAttributes / rankingRules / typoTolerance / synonyms ----
+    // Exercised via SyncToMeilisearchExtraSettingsEntity, a dedicated fixture that deliberately
+    // leaves searchableAttributes/filterableAttributes empty (see its own javadoc) so these tests
+    // never interact with the searchable/filterable assertions above, no matter what MasterItem's
+    // own annotation happens to declare.
+
+    @Test
+    void appliesSortableAttributes() {
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"));
+
+        initializer.initializeIndexes();
+
+        verify(index).updateSortableAttributesSettings(new String[]{"termLength"});
+    }
+
+    @Test
+    void skipsUpdate_whenSortableAttributesAlreadyMatch() {
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"));
+        when(index.getSortableAttributesSettings()).thenReturn(new String[]{"termLength"});
+
+        initializer.initializeIndexes();
+
+        verify(index, never()).updateSortableAttributesSettings(any());
+    }
+
+    @Test
+    void appliesRankingRules() {
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"));
+
+        initializer.initializeIndexes();
+
+        verify(index).updateRankingRulesSettings(new String[]{
+                "words", "typo", "proximity", "attribute", "sort", "exactness", "termLength:asc"});
+    }
+
+    // MasterItem's own annotation also declares typoTolerance/synonyms, so the shared mock Index
+    // sees calls from both it and the fixture -- these isolate the fixture's specific call among
+    // however many happened, rather than assuming there's exactly one.
+
+    @Test
+    void appliesTypoTolerance_withOnlyTheConfiguredMinWordSizes() {
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"));
+
+        initializer.initializeIndexes();
+
+        ArgumentCaptor<TypoTolerance> captor = ArgumentCaptor.forClass(TypoTolerance.class);
+        verify(index, atLeastOnce()).updateTypoToleranceSettings(captor.capture());
+        TypoTolerance applied = captor.getAllValues().stream()
+                .filter(t -> Map.of("oneTypo", 3, "twoTypos", 6).equals(t.getMinWordSizeForTypos()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "no updateTypoToleranceSettings call matched the fixture's thresholds"));
+        assertThat(applied.isEnabled()).isTrue();
+    }
+
+    @Test
+    void appliesSynonyms_oneWayPerDeclaredEntry() {
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"));
+
+        initializer.initializeIndexes();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String[]>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(index, atLeastOnce()).updateSynonymsSettings(captor.capture());
+        Map<String, String[]> applied = captor.getAllValues().stream()
+                .filter(m -> m.containsKey("fixtureWord"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "no updateSynonymsSettings call matched the fixture's dictionary"));
+        assertThat(applied).containsOnlyKeys("fixtureWord");
+        assertThat(applied.get("fixtureWord")).containsExactly("fixtureSynonym");
     }
 }
