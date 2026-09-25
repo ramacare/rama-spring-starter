@@ -21,25 +21,15 @@ import java.util.Map;
 @TrackRevision
 @SyncToMongo(mongoClass = org.rama.mongo.document.MasterItem.class, mapperClass = MongoMasterItemMapper.class)
 @SyncToMeilisearch(
+        // Split by groupKey ($ICD10, $ICD9, $SNOMEDCT, $COMPOSITE, ...): typo tolerance and
+        // synonyms differ per groupKey (e.g. the rt/lt/ca/fx/hx/tx dictionary only makes sense for
+        // $SNOMEDCT), which a single shared index can't express -- Meilisearch has no
+        // per-document-filtered typo tolerance or synonym setting. filterableAttributes stays here
+        // since every split index needs the same three fields filterable. Per-groupKey tuning
+        // (typoTolerance, synonyms, ...) is added via a MeilisearchIndexSettingsResolver bean for
+        // that groupKey, layered over this base -- see MeilisearchIndexSettingsResolver.
         filterableAttributes = {"groupKey", "filterText", "statusCode"},
-        // Applies index-wide, across every groupKey MasterItem holds ($ICD10, $ICD9, $SNOMEDCT,
-        // $COMPOSITE, ...) -- Meilisearch has no per-document-filtered typo tolerance or synonym
-        // dictionary. A groupKey that genuinely needs different tuning would need its own
-        // Meilisearch index, which is a separate, bigger change than this one.
-        typoToleranceMinWordSizeOneTypo = 4,
-        typoToleranceMinWordSizeTwoTypos = 8,
-        // Same dictionary as the POC config, applied as-is: one-way per entry (see
-        // SyncToMeilisearch.Synonym) -- "rt" finds "right", but "right" does not find "rt".
-        // Revisit if that asymmetry turns out to matter in practice; making this externally
-        // configurable (rather than compiled into the annotation) is a separate follow-up.
-        synonyms = {
-                @SyncToMeilisearch.Synonym(word = "rt", mappings = {"right"}),
-                @SyncToMeilisearch.Synonym(word = "lt", mappings = {"left"}),
-                @SyncToMeilisearch.Synonym(word = "ca", mappings = {"cancer"}),
-                @SyncToMeilisearch.Synonym(word = "fx", mappings = {"fracture"}),
-                @SyncToMeilisearch.Synonym(word = "hx", mappings = {"history"}),
-                @SyncToMeilisearch.Synonym(word = "tx", mappings = {"treatment"}),
-        }
+        indexNameField = "groupKey"
 )
 public class MasterItem implements Auditable {
     @Id

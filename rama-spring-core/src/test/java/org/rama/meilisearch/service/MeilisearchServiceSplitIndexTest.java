@@ -72,12 +72,13 @@ class MeilisearchServiceSplitIndexTest {
 
     @Test
     void resolveIndexName_isUnaffectedForAPlainEntityWithNoIndexNameField() {
-        // MasterItem itself isn't split (indexNameField is empty by default) -- confirms the new
-        // instance-based overload doesn't change behavior for every other existing entity.
+        // MasterItem is now split by groupKey -- use a fixture that stays unsplit (indexNameField
+        // empty by default) to confirm the new instance-based overload doesn't change behavior for
+        // every other, non-split entity.
         MeilisearchService service = new MeilisearchService(context, client, JsonMapper.builder().build(), errorHandler);
 
-        assertThat(service.resolveIndexName(new org.rama.entity.master.MasterItem("g", "c", "v")))
-                .isEqualTo(service.resolveIndexName(org.rama.entity.master.MasterItem.class));
+        assertThat(service.resolveIndexName(new org.rama.entity.testfixture.SyncToMeilisearchExtraSettingsEntity()))
+                .isEqualTo(service.resolveIndexName(org.rama.entity.testfixture.SyncToMeilisearchExtraSettingsEntity.class));
     }
 
     @Test

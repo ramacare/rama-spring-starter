@@ -66,37 +66,54 @@ class MeilisearchIndexInitializerTest {
         return new MeilisearchIndexInitializer(client, meilisearchService, basePackages, resolvers, new EnsuredMeilisearchIndexes());
     }
 
-    /** The bug: only the application's package is supplied, and MasterItem lives in org.rama. */
+    /**
+     * The bug: only the application's package is supplied, and MasterItem lives in org.rama.
+     *
+     * <p>MasterItem is now split by groupKey, so eager initialization at startup only happens for
+     * a split value a {@link MeilisearchIndexSettingsResolver} bean names (see the "eager,
+     * resolver-driven split-index initialization" tests below) -- registering one here for
+     * MasterItem exercises the same "found outside basePackages" scan behavior the original bug
+     * guarded against, now through the split path.
+     */
     @Test
     void initializesStarterOwnedEntity_whenOnlyAnApplicationPackageIsConfigured() {
-        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"));
+        MeilisearchIndexSettingsResolver resolver = resolverFor(MasterItem.class, "$SNOMEDCT",
+                org.rama.meilisearch.MeilisearchIndexSettings.builder().build());
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"), List.of(resolver));
 
         initializer.initializeIndexes();
 
         ArgumentCaptor<String[]> filterable = ArgumentCaptor.forClass(String[].class);
-        verify(index).updateFilterableAttributesSettings(filterable.capture());
+        verify(index, atLeastOnce()).updateFilterableAttributesSettings(filterable.capture());
 
-        // Exactly the attributes declared on MasterItem's @SyncToMeilisearch.
-        assertThat(filterable.getValue())
-                .as("MasterItem's filterable attributes must be applied even though it lives in "
-                        + "org.rama and the app's base package is com.example.app")
-                .containsExactly("groupKey", "filterText", "statusCode");
+        // Exactly the attributes declared on MasterItem's @SyncToMeilisearch, layered under the
+        // resolver's (empty) settings.
+        assertThat(filterable.getAllValues())
+                .as("MasterItem's filterable attributes must be applied to its $SNOMEDCT split index "
+                        + "even though it lives in org.rama and the app's base package is com.example.app")
+                .anySatisfy(v -> assertThat(v).containsExactly("groupKey", "filterText", "statusCode"));
     }
 
     /** An app that nests under org.rama must not cause the same index to be initialized twice. */
     @Test
     void doesNotInitializeTheSameEntityTwice_whenBasePackagesOverlapTheStarter() {
-        MeilisearchIndexInitializer initializer = initializerFor(List.of("org.rama"));
+        MeilisearchIndexSettingsResolver resolver = resolverFor(MasterItem.class, "$SNOMEDCT",
+                org.rama.meilisearch.MeilisearchIndexSettings.builder().build());
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("org.rama"), List.of(resolver));
 
         initializer.initializeIndexes();
 
+        // Exactly once -- if org.rama being both an explicit basePackage AND the starter's own
+        // scan fallback caused MasterItem to be processed twice, this would be times(2).
         verify(index, times(1)).updateFilterableAttributesSettings(any());
     }
 
     /** Settings already correct → no redundant write to Meilisearch. */
     @Test
     void skipsUpdate_whenFilterableAttributesAlreadyMatch() {
-        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"));
+        MeilisearchIndexSettingsResolver resolver = resolverFor(MasterItem.class, "$SNOMEDCT",
+                org.rama.meilisearch.MeilisearchIndexSettings.builder().build());
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"), List.of(resolver));
         when(index.getFilterableAttributesSettings())
                 .thenReturn(new String[]{"groupKey", "filterText", "statusCode"});
 
