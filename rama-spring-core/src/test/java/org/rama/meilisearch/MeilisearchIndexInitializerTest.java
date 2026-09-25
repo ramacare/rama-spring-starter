@@ -44,8 +44,14 @@ class MeilisearchIndexInitializerTest {
     @Mock private Index index;
 
     private MeilisearchIndexInitializer initializerFor(List<String> basePackages) {
+        return initializerFor(basePackages, List.of());
+    }
+
+    private MeilisearchIndexInitializer initializerFor(List<String> basePackages, List<MeilisearchIndexSettingsResolver> resolvers) {
         when(meilisearchService.resolveIndexName(any())).thenAnswer(
                 inv -> ((Class<?>) inv.getArgument(0)).getSimpleName().toLowerCase());
+        when(meilisearchService.resolveIndexName(any(), anyString())).thenAnswer(
+                inv -> ((Class<?>) inv.getArgument(0)).getSimpleName().toLowerCase() + "_" + inv.getArgument(1));
         when(meilisearchService.resolvePrimaryKey(any())).thenReturn("id");
 
         when(client.getIndex(anyString())).thenReturn(index);
@@ -57,7 +63,7 @@ class MeilisearchIndexInitializerTest {
         when(index.getSortableAttributesSettings()).thenReturn(new String[0]);
         when(index.getRankingRulesSettings()).thenReturn(new String[0]);
 
-        return new MeilisearchIndexInitializer(client, meilisearchService, basePackages);
+        return new MeilisearchIndexInitializer(client, meilisearchService, basePackages, resolvers, new EnsuredMeilisearchIndexes());
     }
 
     /** The bug: only the application's package is supplied, and MasterItem lives in org.rama. */
@@ -170,5 +176,70 @@ class MeilisearchIndexInitializerTest {
                         "no updateSynonymsSettings call matched the fixture's dictionary"));
         assertThat(applied).containsOnlyKeys("fixtureWord");
         assertThat(applied.get("fixtureWord")).containsExactly("fixtureSynonym");
+    }
+
+    // ---- eager, resolver-driven split-index initialization ----
+    // Exercised via SplitEagerInitEntity, never synced -- only MeilisearchIndexSettingsResolver
+    // beans drive what gets initialized here, which is the entire point: a split index a resolver
+    // names must be ready at startup, with no dependency on new data arriving first.
+
+    private static MeilisearchIndexSettingsResolver resolverFor(Class<?> entityClass, String splitFieldValue, org.rama.meilisearch.MeilisearchIndexSettings settings) {
+        return new MeilisearchIndexSettingsResolver() {
+            @Override
+            public Class<?> entityClass() {
+                return entityClass;
+            }
+
+            @Override
+            public String splitFieldValue() {
+                return splitFieldValue;
+            }
+
+            @Override
+            public org.rama.meilisearch.MeilisearchIndexSettings settings() {
+                return settings;
+            }
+        };
+    }
+
+    @Test
+    void eagerlyInitializesEverySplitIndexAResolverNames() {
+        MeilisearchIndexSettingsResolver resolver = resolverFor(
+                org.rama.entity.testfixture.SplitEagerInitEntity.class, "th",
+                org.rama.meilisearch.MeilisearchIndexSettings.builder()
+                        .synonyms(Map.of("bkk", new String[]{"bangkok"}))
+                        .build());
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"), List.of(resolver));
+
+        initializer.initializeIndexes();
+
+        // atLeastOnce()/filter, not a single capture: MasterItem's own annotation and the earlier
+        // group's SyncToMeilisearchExtraSettingsEntity fixture also call updateSynonymsSettings in
+        // this same run (every @SyncToMeilisearch entity under org.rama.entity.* gets scanned
+        // together), so this isolates the one call this resolver caused.
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String[]>> synonymsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(index, atLeastOnce()).updateSynonymsSettings(synonymsCaptor.capture());
+        assertThat(synonymsCaptor.getAllValues().stream().anyMatch(m -> m.containsKey("bkk")))
+                .as("no updateSynonymsSettings call matched this resolver's dictionary")
+                .isTrue();
+        synonymsCaptor.getAllValues().stream().filter(m -> m.containsKey("bkk")).findFirst()
+                .ifPresent(m -> assertThat(m.get("bkk")).containsExactly("bangkok"));
+
+        // The resolver only overrode synonyms -- filterableAttributes still comes from
+        // SplitEagerInitEntity's own @SyncToMeilisearch, layered underneath rather than dropped.
+        verify(index).updateFilterableAttributesSettings(new String[]{"region"});
+    }
+
+    @Test
+    void doesNotEagerlyInitializeASplitIndexNoResolverNames() {
+        // No resolver at all for SplitEagerInitEntity -- it stays fully lazy (created/configured
+        // on first sync instead). Its own distinguishing setting ({"region"}) must never appear
+        // among the calls this run makes, however many other entities also get initialized.
+        MeilisearchIndexInitializer initializer = initializerFor(List.of("com.example.app"), List.of());
+
+        initializer.initializeIndexes();
+
+        verify(index, never()).updateFilterableAttributesSettings(new String[]{"region"});
     }
 }

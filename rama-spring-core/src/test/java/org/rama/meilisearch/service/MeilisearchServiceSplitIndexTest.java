@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.rama.entity.testfixture.SplitByCategoryEntity;
+import org.rama.meilisearch.EnsuredMeilisearchIndexes;
 import org.rama.meilisearch.MeilisearchIndexSettings;
 import org.rama.meilisearch.MeilisearchIndexSettingsResolver;
 import org.rama.meilisearch.mapper.DefaultMeilisearchMapper;
@@ -56,7 +57,7 @@ class MeilisearchServiceSplitIndexTest {
         JsonMapper objectMapper = JsonMapper.builder().build();
         when(context.getBean(DefaultMeilisearchMapper.class)).thenReturn(new DefaultMeilisearchMapper(objectMapper));
 
-        return new MeilisearchService(context, client, objectMapper, errorHandler, resolvers);
+        return new MeilisearchService(context, client, objectMapper, errorHandler, resolvers, new EnsuredMeilisearchIndexes());
     }
 
     @Test
@@ -100,24 +101,29 @@ class MeilisearchServiceSplitIndexTest {
         verify(client, times(2)).createIndex(anyString(), anyString());
     }
 
-    @Test
-    void sync_prefersAMatchingResolversSettings_overTheAnnotations() throws MeilisearchException {
-        MeilisearchIndexSettingsResolver resolver = new MeilisearchIndexSettingsResolver() {
+    private static MeilisearchIndexSettingsResolver resolverFor(Class<?> entityClass, String splitFieldValue, MeilisearchIndexSettings settings) {
+        return new MeilisearchIndexSettingsResolver() {
             @Override
-            public boolean supports(Class<?> entityClass) {
-                return entityClass == SplitByCategoryEntity.class;
+            public Class<?> entityClass() {
+                return entityClass;
             }
 
             @Override
-            public MeilisearchIndexSettings resolve(Class<?> entityClass, String splitFieldValue) {
-                if (!"$SNOMEDCT".equals(splitFieldValue)) {
-                    return null; // falls back to the annotation for any other value
-                }
-                return MeilisearchIndexSettings.builder()
-                        .synonyms(Map.of("rt", new String[]{"right"}))
-                        .build();
+            public String splitFieldValue() {
+                return splitFieldValue;
+            }
+
+            @Override
+            public MeilisearchIndexSettings settings() {
+                return settings;
             }
         };
+    }
+
+    @Test
+    void sync_appliesTheMatchingResolversSettings_layeredOverTheAnnotation() throws MeilisearchException {
+        MeilisearchIndexSettingsResolver resolver = resolverFor(SplitByCategoryEntity.class, "$SNOMEDCT",
+                MeilisearchIndexSettings.builder().synonyms(Map.of("rt", new String[]{"right"})).build());
         MeilisearchService service = serviceWith(List.of(resolver));
 
         service.sync(new SplitByCategoryEntity("1", "$SNOMEDCT", "n1"));
@@ -134,6 +140,19 @@ class MeilisearchServiceSplitIndexTest {
 
         // The resolver only overrode synonyms -- filterableAttributes still comes from
         // SplitByCategoryEntity's own @SyncToMeilisearch, layered underneath rather than dropped.
+        verify(index).updateFilterableAttributesSettings(new String[]{"category"});
+    }
+
+    @Test
+    void sync_ignoresAResolverForADifferentSplitFieldValue() throws MeilisearchException {
+        MeilisearchIndexSettingsResolver resolver = resolverFor(SplitByCategoryEntity.class, "$SNOMEDCT",
+                MeilisearchIndexSettings.builder().synonyms(Map.of("rt", new String[]{"right"})).build());
+        MeilisearchService service = serviceWith(List.of(resolver));
+
+        // A resolver registered for "$SNOMEDCT" must not affect a sync for "$ICD10".
+        service.sync(new SplitByCategoryEntity("1", "$ICD10", "n1"));
+
+        verify(index, never()).updateSynonymsSettings(any());
         verify(index).updateFilterableAttributesSettings(new String[]{"category"});
     }
 

@@ -40,11 +40,16 @@ public class MeilisearchIndexInitializer {
     private final Client meilisearchClient;
     private final MeilisearchService meilisearchService;
     private final List<String> basePackages;
+    private final List<MeilisearchIndexSettingsResolver> settingsResolvers;
+    private final EnsuredMeilisearchIndexes ensuredIndexes;
 
-    public MeilisearchIndexInitializer(Client meilisearchClient, MeilisearchService meilisearchService, List<String> basePackages) {
+    public MeilisearchIndexInitializer(Client meilisearchClient, MeilisearchService meilisearchService, List<String> basePackages,
+                                        List<MeilisearchIndexSettingsResolver> settingsResolvers, EnsuredMeilisearchIndexes ensuredIndexes) {
         this.meilisearchClient = meilisearchClient;
         this.meilisearchService = meilisearchService;
         this.basePackages = basePackages;
+        this.settingsResolvers = settingsResolvers;
+        this.ensuredIndexes = ensuredIndexes;
     }
 
     @PostConstruct
@@ -78,10 +83,8 @@ public class MeilisearchIndexInitializer {
 
     private void initializeIndex(Class<?> clazz) {
         SyncToMeilisearch annotation = clazz.getAnnotation(SyncToMeilisearch.class);
-        // A split entity has no single index to initialize here -- each split index is created
-        // and configured lazily, on first sync of a not-yet-seen field value (see
-        // MeilisearchService and SyncToMeilisearch#indexNameField()).
         if (!annotation.indexNameField().isEmpty()) {
+            initializeSplitIndexes(clazz, annotation);
             return;
         }
         try {
@@ -91,6 +94,37 @@ public class MeilisearchIndexInitializer {
             MeilisearchIndexSettingsApplier.apply(index, MeilisearchIndexSettings.fromAnnotation(annotation));
         } catch (Exception ex) {
             LOGGER.error("Failed to sync index for class '{}': {}", clazz.getSimpleName(), ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Eagerly creates/configures every split index a {@link MeilisearchIndexSettingsResolver}
+     * bean names for {@code clazz} -- the only split indexes knowable without a database query
+     * (see {@link SyncToMeilisearch#indexNameField()}). This is what lets changing a resolver's
+     * settings and restarting the app take effect immediately: any OTHER split-field value this
+     * entity happens to take on (no resolver registered for it) still gets created/configured
+     * lazily instead, the first time {@code MeilisearchService.sync()} sees it.
+     */
+    private void initializeSplitIndexes(Class<?> clazz, SyncToMeilisearch annotation) {
+        MeilisearchIndexSettings base = MeilisearchIndexSettings.fromAnnotation(annotation);
+        for (MeilisearchIndexSettingsResolver resolver : settingsResolvers) {
+            if (resolver.entityClass() != clazz) {
+                continue;
+            }
+            String indexName = meilisearchService.resolveIndexName(clazz, resolver.splitFieldValue());
+            if (!ensuredIndexes.markEnsured(indexName)) {
+                LOGGER.warn("Two MeilisearchIndexSettingsResolver beans both claim {} + \"{}\" -- "
+                                + "only the first one registered was applied to index '{}'",
+                        clazz.getSimpleName(), resolver.splitFieldValue(), indexName);
+                continue;
+            }
+            try {
+                String primaryKey = meilisearchService.resolvePrimaryKey(clazz);
+                Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
+                MeilisearchIndexSettingsApplier.apply(index, resolver.settings().layeredOver(base));
+            } catch (Exception ex) {
+                LOGGER.error("Failed to sync split index '{}' for class '{}': {}", indexName, clazz.getSimpleName(), ex.getMessage(), ex);
+            }
         }
     }
 }

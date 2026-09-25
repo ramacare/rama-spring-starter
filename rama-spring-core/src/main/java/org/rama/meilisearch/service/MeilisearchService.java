@@ -12,6 +12,7 @@ import com.meilisearch.sdk.model.TaskInfo;
 import com.meilisearch.sdk.model.TaskStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.rama.annotation.SyncToMeilisearch;
+import org.rama.meilisearch.EnsuredMeilisearchIndexes;
 import org.rama.meilisearch.MeilisearchIndexSettings;
 import org.rama.meilisearch.MeilisearchIndexSettingsApplier;
 import org.rama.meilisearch.MeilisearchIndexSettingsResolver;
@@ -28,8 +29,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 public class MeilisearchService {
@@ -38,23 +37,20 @@ public class MeilisearchService {
     private final JsonMapper objectMapper;
     private final MeilisearchErrorHandler errorHandler;
     private final List<MeilisearchIndexSettingsResolver> settingsResolvers;
-
-    /** Split index names already created and settings-applied this JVM run (see
-     * {@link SyncToMeilisearch#indexNameField()}) -- a plain entity never touches this, since its
-     * one index is initialized eagerly at startup by {@code MeilisearchIndexInitializer} instead. */
-    private final Set<String> ensuredSplitIndexNames = ConcurrentHashMap.newKeySet();
+    private final EnsuredMeilisearchIndexes ensuredIndexes;
 
     public MeilisearchService(ApplicationContext context, Client meilisearchClient, JsonMapper objectMapper, MeilisearchErrorHandler errorHandler) {
-        this(context, meilisearchClient, objectMapper, errorHandler, List.of());
+        this(context, meilisearchClient, objectMapper, errorHandler, List.of(), new EnsuredMeilisearchIndexes());
     }
 
-    public MeilisearchService(ApplicationContext context, Client meilisearchClient, JsonMapper objectMapper,
-                               MeilisearchErrorHandler errorHandler, List<MeilisearchIndexSettingsResolver> settingsResolvers) {
+    public MeilisearchService(ApplicationContext context, Client meilisearchClient, JsonMapper objectMapper, MeilisearchErrorHandler errorHandler,
+                               List<MeilisearchIndexSettingsResolver> settingsResolvers, EnsuredMeilisearchIndexes ensuredIndexes) {
         this.context = context;
         this.meilisearchClient = meilisearchClient;
         this.objectMapper = objectMapper;
         this.errorHandler = errorHandler;
         this.settingsResolvers = settingsResolvers;
+        this.ensuredIndexes = ensuredIndexes;
     }
 
     @Async
@@ -103,17 +99,28 @@ public class MeilisearchService {
         }
     }
 
+    /** The index a specific ({@code entityClass}, {@code splitFieldValue}) pair resolves to --
+     * lets a caller that hasn't got an entity instance in hand (e.g.
+     * {@code MeilisearchIndexInitializer}, eagerly initializing every
+     * {@link MeilisearchIndexSettingsResolver}-named index at startup) compute the same index name
+     * {@link #resolveIndexName(Object)} would for a matching instance. */
+    public String resolveIndexName(Class<?> entityClass, String splitFieldValue) {
+        return indexNameFor(entityClass, splitFieldValue);
+    }
+
     private String indexNameFor(Class<?> entityClass, String splitFieldValue) {
         String base = resolveIndexName(entityClass);
         return splitFieldValue == null ? base : base + "_" + sanitize(splitFieldValue);
     }
 
     /** Ensures the split index named {@code indexName} exists and carries the right settings; a
-     * no-op past the first call for any given index name, since Meilisearch already carries
-     * whatever settings that first call applied. */
+     * no-op past the first call for any given index name -- either because
+     * {@code MeilisearchIndexInitializer} already ensured it eagerly at startup (any split index a
+     * {@link MeilisearchIndexSettingsResolver} bean names), or because an earlier sync of this
+     * same value already did. */
     private void ensureSplitIndexInitialized(Class<?> entityClass, String indexName, String splitFieldValue) throws MeilisearchException {
-        if (!ensuredSplitIndexNames.add(indexName)) {
-            return; // already ensured this run.
+        if (!ensuredIndexes.markEnsured(indexName)) {
+            return;
         }
         SyncToMeilisearch annotation = entityClass.getAnnotation(SyncToMeilisearch.class);
         String primaryKey = resolvePrimaryKey(entityClass);
@@ -124,16 +131,14 @@ public class MeilisearchService {
 
     private MeilisearchIndexSettings resolveSplitIndexSettings(Class<?> entityClass, SyncToMeilisearch annotation, String splitFieldValue) {
         MeilisearchIndexSettings base = MeilisearchIndexSettings.fromAnnotation(annotation);
-        for (MeilisearchIndexSettingsResolver resolver : settingsResolvers) {
-            if (resolver.supports(entityClass)) {
-                MeilisearchIndexSettings resolved = resolver.resolve(entityClass, splitFieldValue);
+        return settingsResolvers.stream()
+                .filter(r -> r.entityClass() == entityClass && r.splitFieldValue().equals(splitFieldValue))
+                .findFirst()
                 // Layered, not replaced: a resolver overriding just synonyms for one split value
                 // must not silently drop filterableAttributes (or anything else) the annotation
                 // declares for every index of this entity -- see MeilisearchIndexSettings#layeredOver.
-                return resolved == null ? base : resolved.layeredOver(base);
-            }
-        }
-        return base;
+                .map(r -> r.settings().layeredOver(base))
+                .orElse(base);
     }
 
     public <T> TaskInfo addDocuments(String indexName, T entity) throws Exception {
