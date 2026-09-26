@@ -1,5 +1,8 @@
 package org.rama.meilisearch;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -13,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * settings the other already did.
  */
 public class EnsuredMeilisearchIndexes {
+    private static final Logger LOGGER = LoggerFactory.getLogger(EnsuredMeilisearchIndexes.class);
+
     private final ConcurrentHashMap<String, CompletableFuture<Void>> ensured = new ConcurrentHashMap<>();
 
     /**
@@ -34,13 +39,18 @@ public class EnsuredMeilisearchIndexes {
         CompletableFuture<Void> mine = new CompletableFuture<>();
         CompletableFuture<Void> existing = ensured.putIfAbsent(indexName, mine);
         if (existing != null) {
+            LOGGER.debug("Meilisearch index '{}' is already claimed -- waiting for its settings to finish applying", indexName);
             existing.join();
             return false;
         }
+        LOGGER.info("Applying Meilisearch settings for index '{}' (first time this JVM has seen it)", indexName);
         try {
             initializer.run();
             mine.complete(null);
+            LOGGER.info("Applied Meilisearch settings for index '{}'", indexName);
         } catch (RuntimeException | Error ex) {
+            LOGGER.error("Failed to apply Meilisearch settings for index '{}' -- it will NOT be retried this JVM run: {}",
+                    indexName, ex.getMessage(), ex);
             mine.completeExceptionally(ex);
             throw ex;
         }
