@@ -3,6 +3,7 @@ package org.rama.meilisearch;
 import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Index;
 import com.meilisearch.sdk.exceptions.MeilisearchException;
+import com.meilisearch.sdk.model.TaskInfo;
 
 /**
  * Gets or creates a Meilisearch index by name, correcting its primary key if it's already wrong.
@@ -23,7 +24,14 @@ public final class MeilisearchIndexes {
             }
             return index;
         } catch (MeilisearchException ex) {
-            meilisearchClient.createIndex(indexName, primaryKey);
+            // createIndex enqueues an async task and returns immediately -- a caller that turns
+            // around and reads/writes this index's settings right away (as every caller of this
+            // method does) can otherwise hit Meilisearch before the index actually exists yet,
+            // getting back something other than the expected shape and blowing up the SDK's own
+            // Gson deserialization. Wait for the task the same way sync() already waits after
+            // addDocuments, so the index is guaranteed to be there before we hand back the handle.
+            TaskInfo taskInfo = meilisearchClient.createIndex(indexName, primaryKey);
+            meilisearchClient.waitForTask(taskInfo.getTaskUid());
             return meilisearchClient.index(indexName);
         }
     }
