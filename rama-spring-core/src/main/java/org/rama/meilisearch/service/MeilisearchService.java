@@ -113,20 +113,24 @@ public class MeilisearchService {
         return splitFieldValue == null ? base : base + "_" + sanitize(splitFieldValue);
     }
 
-    /** Ensures the split index named {@code indexName} exists and carries the right settings; a
-     * no-op past the first call for any given index name -- either because
-     * {@code MeilisearchIndexInitializer} already ensured it eagerly at startup (any split index a
-     * {@link MeilisearchIndexSettingsResolver} bean names), or because an earlier sync of this
-     * same value already did. */
-    private void ensureSplitIndexInitialized(Class<?> entityClass, String indexName, String splitFieldValue) throws MeilisearchException {
-        if (!ensuredIndexes.markEnsured(indexName)) {
-            return;
-        }
-        SyncToMeilisearch annotation = entityClass.getAnnotation(SyncToMeilisearch.class);
-        String primaryKey = resolvePrimaryKey(entityClass);
-        Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
-        MeilisearchIndexSettings settings = resolveSplitIndexSettings(entityClass, annotation, splitFieldValue);
-        MeilisearchIndexSettingsApplier.apply(index, settings);
+    /** Ensures the split index named {@code indexName} exists and carries the right settings
+     * before returning -- either by applying them itself (the first caller for this index name,
+     * across every concurrent {@code @Async sync()} thread and {@code MeilisearchIndexInitializer}
+     * eagerly ensuring it at startup), or by blocking until whichever caller won that race
+     * finishes, so a losing thread can never write a document -- or a search can never run --
+     * against a split index whose settings haven't actually been applied yet. */
+    private void ensureSplitIndexInitialized(Class<?> entityClass, String indexName, String splitFieldValue) {
+        ensuredIndexes.ensureInitialized(indexName, () -> {
+            try {
+                SyncToMeilisearch annotation = entityClass.getAnnotation(SyncToMeilisearch.class);
+                String primaryKey = resolvePrimaryKey(entityClass);
+                Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
+                MeilisearchIndexSettings settings = resolveSplitIndexSettings(entityClass, annotation, splitFieldValue);
+                MeilisearchIndexSettingsApplier.apply(index, settings);
+            } catch (MeilisearchException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
     }
 
     private MeilisearchIndexSettings resolveSplitIndexSettings(Class<?> entityClass, SyncToMeilisearch annotation, String splitFieldValue) {
