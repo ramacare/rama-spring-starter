@@ -150,9 +150,10 @@ public class MeilisearchService {
     }
 
     /** Recomputes and re-applies {@code entityClass}/{@code splitFieldValue}'s settings straight off
-     * the annotation and any matching resolver bean -- see {@link #apply(Class, String, MeilisearchIndexSettings)}. */
-    public void apply(Class<?> entityClass, String splitFieldValue) throws MeilisearchException {
-        apply(entityClass, splitFieldValue, null);
+     * the annotation and any matching resolver bean -- see
+     * {@link #applySettings(Class, String, MeilisearchIndexSettings)}. */
+    public void applySettings(Class<?> entityClass, String splitFieldValue) throws MeilisearchException {
+        applySettings(entityClass, splitFieldValue, null);
     }
 
     /**
@@ -168,7 +169,7 @@ public class MeilisearchService {
      * pushed right now rather than on the next sync or the next restart. Works for split entities
      * ({@code splitFieldValue} non-null) and unsplit ones ({@code splitFieldValue} null) alike.
      */
-    public void apply(Class<?> entityClass, String splitFieldValue, MeilisearchIndexSettings override) throws MeilisearchException {
+    public void applySettings(Class<?> entityClass, String splitFieldValue, MeilisearchIndexSettings override) throws MeilisearchException {
         MeilisearchIndexSettings effective = resolveSplitIndexSettings(entityClass, splitFieldValue);
         if (override != null) {
             effective = override.mergedOnto(effective);

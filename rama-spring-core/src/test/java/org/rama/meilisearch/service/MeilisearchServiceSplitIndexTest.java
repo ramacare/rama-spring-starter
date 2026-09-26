@@ -179,7 +179,7 @@ class MeilisearchServiceSplitIndexTest {
                 MeilisearchIndexSettings.builder().synonyms(Map.of("rt", new String[]{"right"})).build());
         MeilisearchService service = serviceWith(List.of(resolver));
 
-        service.apply(SplitByCategoryEntity.class, "$SNOMEDCT");
+        service.applySettings(SplitByCategoryEntity.class, "$SNOMEDCT");
 
         verify(index).updateFilterableAttributesSettings(new String[]{"category"});
         @SuppressWarnings("unchecked")
@@ -197,7 +197,7 @@ class MeilisearchServiceSplitIndexTest {
                 .synonyms(Map.of("dm", new String[]{"diabetes mellitus"}))
                 .build();
 
-        service.apply(SplitByCategoryEntity.class, "$SNOMEDCT", override);
+        service.applySettings(SplitByCategoryEntity.class, "$SNOMEDCT", override);
 
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<Map<String, String[]>> captor = org.mockito.ArgumentCaptor.forClass(Map.class);
@@ -209,7 +209,7 @@ class MeilisearchServiceSplitIndexTest {
     void apply_worksForAnUnsplitEntity_withANullSplitFieldValue() throws MeilisearchException {
         MeilisearchService service = serviceWith(List.of());
 
-        service.apply(org.rama.entity.testfixture.SyncToMeilisearchExtraSettingsEntity.class, null);
+        service.applySettings(org.rama.entity.testfixture.SyncToMeilisearchExtraSettingsEntity.class, null);
 
         verify(index).updateSortableAttributesSettings(new String[]{"termLength"});
     }
