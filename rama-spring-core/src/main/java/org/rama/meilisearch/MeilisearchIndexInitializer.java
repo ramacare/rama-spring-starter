@@ -84,7 +84,7 @@ public class MeilisearchIndexInitializer {
     private void initializeIndex(Class<?> clazz) {
         SyncToMeilisearch annotation = clazz.getAnnotation(SyncToMeilisearch.class);
         if (!annotation.indexNameField().isEmpty()) {
-            initializeSplitIndexes(clazz, annotation);
+            initializeSplitIndexes(clazz);
             return;
         }
         try {
@@ -105,8 +105,7 @@ public class MeilisearchIndexInitializer {
      * entity happens to take on (no resolver registered for it) still gets created/configured
      * lazily instead, the first time {@code MeilisearchService.sync()} sees it.
      */
-    private void initializeSplitIndexes(Class<?> clazz, SyncToMeilisearch annotation) {
-        MeilisearchIndexSettings base = MeilisearchIndexSettings.fromAnnotation(annotation);
+    private void initializeSplitIndexes(Class<?> clazz) {
         for (MeilisearchIndexSettingsResolver resolver : settingsResolvers) {
             if (resolver.entityClass() != clazz) {
                 continue;
@@ -116,7 +115,8 @@ public class MeilisearchIndexInitializer {
                 try {
                     String primaryKey = meilisearchService.resolvePrimaryKey(clazz);
                     Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
-                    MeilisearchIndexSettingsApplier.apply(index, resolver.settings().layeredOver(base));
+                    MeilisearchIndexSettings settings = meilisearchService.resolveSplitIndexSettings(clazz, resolver.splitFieldValue());
+                    MeilisearchIndexSettingsApplier.apply(index, settings);
                 } catch (Exception ex) {
                     LOGGER.error("Failed to sync split index '{}' for class '{}': {}", indexName, clazz.getSimpleName(), ex.getMessage(), ex);
                 }

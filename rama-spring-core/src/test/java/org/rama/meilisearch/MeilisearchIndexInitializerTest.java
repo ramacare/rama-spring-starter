@@ -53,6 +53,20 @@ class MeilisearchIndexInitializerTest {
         when(meilisearchService.resolveIndexName(any(), anyString())).thenAnswer(
                 inv -> ((Class<?>) inv.getArgument(0)).getSimpleName().toLowerCase() + "_" + inv.getArgument(1));
         when(meilisearchService.resolvePrimaryKey(any())).thenReturn("id");
+        // The initializer now delegates settings computation to this method instead of doing its
+        // own annotation+resolver layering -- mirror the real implementation here so this mock
+        // still reflects it.
+        when(meilisearchService.resolveSplitIndexSettings(any(), any())).thenAnswer(inv -> {
+            Class<?> clazz = inv.getArgument(0);
+            String splitFieldValue = inv.getArgument(1);
+            SyncToMeilisearch annotation = clazz.getAnnotation(SyncToMeilisearch.class);
+            org.rama.meilisearch.MeilisearchIndexSettings base = org.rama.meilisearch.MeilisearchIndexSettings.fromAnnotation(annotation);
+            return resolvers.stream()
+                    .filter(r -> r.entityClass() == clazz && java.util.Objects.equals(r.splitFieldValue(), splitFieldValue))
+                    .findFirst()
+                    .map(r -> r.settings().layeredOver(base))
+                    .orElse(base);
+        });
 
         when(client.getIndex(anyString())).thenReturn(index);
         when(index.getPrimaryKey()).thenReturn("id");
