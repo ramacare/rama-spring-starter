@@ -3,6 +3,7 @@ package org.rama.meilisearch;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static java.util.Collections.emptyMap;
@@ -90,6 +91,35 @@ public class MeilisearchIndexSettings {
                 .typoToleranceMinWordSizeOneTypo(typoToleranceMinWordSizeOneTypo != null ? typoToleranceMinWordSizeOneTypo : base.typoToleranceMinWordSizeOneTypo)
                 .typoToleranceMinWordSizeTwoTypos(typoToleranceMinWordSizeTwoTypos != null ? typoToleranceMinWordSizeTwoTypos : base.typoToleranceMinWordSizeTwoTypos)
                 .synonyms(!synonyms.isEmpty() ? synonyms : base.synonyms)
+                .build();
+    }
+
+    /**
+     * Like {@link #layeredOver}, except synonyms merge per-word instead of one map replacing the
+     * other outright: a word {@code this} declares overrides {@code base}'s mapping for that same
+     * word (or adds a new one), but a word only {@code base} declares still applies. Every other
+     * field behaves exactly as {@link #layeredOver}.
+     *
+     * <p>For an admin-configurable override layer (see {@code MeilisearchIndexSettingOverrideService}
+     * in ramaservice): an admin adding one word to the dictionary must not silently discard every
+     * word the code already shipped, which whole-map replacement would do.
+     */
+    public MeilisearchIndexSettings mergedOnto(MeilisearchIndexSettings base) {
+        MeilisearchIndexSettings layered = layeredOver(base);
+        if (synonyms.isEmpty()) {
+            return layered;
+        }
+        Map<String, String[]> merged = new LinkedHashMap<>(base.synonyms);
+        merged.putAll(synonyms);
+        return MeilisearchIndexSettings.builder()
+                .searchableAttributes(layered.searchableAttributes)
+                .filterableAttributes(layered.filterableAttributes)
+                .sortableAttributes(layered.sortableAttributes)
+                .rankingRules(layered.rankingRules)
+                .typoToleranceEnabled(layered.typoToleranceEnabled)
+                .typoToleranceMinWordSizeOneTypo(layered.typoToleranceMinWordSizeOneTypo)
+                .typoToleranceMinWordSizeTwoTypos(layered.typoToleranceMinWordSizeTwoTypos)
+                .synonyms(merged)
                 .build();
     }
 }

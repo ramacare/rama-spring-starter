@@ -122,10 +122,9 @@ public class MeilisearchService {
     private void ensureSplitIndexInitialized(Class<?> entityClass, String indexName, String splitFieldValue) {
         ensuredIndexes.ensureInitialized(indexName, () -> {
             try {
-                SyncToMeilisearch annotation = entityClass.getAnnotation(SyncToMeilisearch.class);
                 String primaryKey = resolvePrimaryKey(entityClass);
                 Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
-                MeilisearchIndexSettings settings = resolveSplitIndexSettings(entityClass, annotation, splitFieldValue);
+                MeilisearchIndexSettings settings = resolveSplitIndexSettings(entityClass, splitFieldValue);
                 MeilisearchIndexSettingsApplier.apply(index, settings);
             } catch (MeilisearchException ex) {
                 throw new RuntimeException(ex);
@@ -133,7 +132,12 @@ public class MeilisearchService {
         });
     }
 
-    private MeilisearchIndexSettings resolveSplitIndexSettings(Class<?> entityClass, SyncToMeilisearch annotation, String splitFieldValue) {
+    /** The settings entity/splitFieldValue resolves to today: the {@code @SyncToMeilisearch}
+     * annotation, layered under a matching {@link MeilisearchIndexSettingsResolver} bean's settings
+     * if one is registered for this exact ({@code entityClass}, {@code splitFieldValue}) pair --
+     * {@code splitFieldValue} may be {@code null} for an unsplit entity, matching no resolver. */
+    public MeilisearchIndexSettings resolveSplitIndexSettings(Class<?> entityClass, String splitFieldValue) {
+        SyncToMeilisearch annotation = entityClass.getAnnotation(SyncToMeilisearch.class);
         MeilisearchIndexSettings base = MeilisearchIndexSettings.fromAnnotation(annotation);
         return settingsResolvers.stream()
                 .filter(r -> r.entityClass() == entityClass && r.splitFieldValue().equals(splitFieldValue))
@@ -143,6 +147,36 @@ public class MeilisearchService {
                 // declares for every index of this entity -- see MeilisearchIndexSettings#layeredOver.
                 .map(r -> r.settings().layeredOver(base))
                 .orElse(base);
+    }
+
+    /** Recomputes and re-applies {@code entityClass}/{@code splitFieldValue}'s settings straight off
+     * the annotation and any matching resolver bean -- see {@link #apply(Class, String, MeilisearchIndexSettings)}. */
+    public void apply(Class<?> entityClass, String splitFieldValue) throws MeilisearchException {
+        apply(entityClass, splitFieldValue, null);
+    }
+
+    /**
+     * Recomputes {@code entityClass}/{@code splitFieldValue}'s settings (annotation + matching
+     * resolver bean), layers {@code override} on top if given -- via
+     * {@link MeilisearchIndexSettings#mergedOnto}, so an override's synonyms add to rather than
+     * replace the rest -- and pushes the result to Meilisearch immediately.
+     *
+     * <p>Unlike {@link #sync}'s lazy, once-only {@code ensureSplitIndexInitialized}, this always
+     * re-applies: it's the generic "force reapply" entrypoint for any caller that changed something
+     * out-of-band (an admin-configurable override, a resolver whose settings changed and the app
+     * hasn't restarted, recovering from a prior failed apply) and needs the effective settings
+     * pushed right now rather than on the next sync or the next restart. Works for split entities
+     * ({@code splitFieldValue} non-null) and unsplit ones ({@code splitFieldValue} null) alike.
+     */
+    public void apply(Class<?> entityClass, String splitFieldValue, MeilisearchIndexSettings override) throws MeilisearchException {
+        MeilisearchIndexSettings effective = resolveSplitIndexSettings(entityClass, splitFieldValue);
+        if (override != null) {
+            effective = override.mergedOnto(effective);
+        }
+        String indexName = resolveIndexName(entityClass, splitFieldValue);
+        String primaryKey = resolvePrimaryKey(entityClass);
+        Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
+        MeilisearchIndexSettingsApplier.apply(index, effective);
     }
 
     public <T> TaskInfo addDocuments(String indexName, T entity) throws Exception {

@@ -170,4 +170,47 @@ class MeilisearchServiceSplitIndexTest {
         verify(index, never()).updateSearchableAttributesSettings(any());
         verify(index, never()).updateSynonymsSettings(any());
     }
+
+    // ---- apply(Class, String[, override]) -- the generic "force reapply" entrypoint ----
+
+    @Test
+    void apply_withNoOverride_appliesTheAnnotationAndResolverSettings() throws MeilisearchException {
+        MeilisearchIndexSettingsResolver resolver = resolverFor(SplitByCategoryEntity.class, "$SNOMEDCT",
+                MeilisearchIndexSettings.builder().synonyms(Map.of("rt", new String[]{"right"})).build());
+        MeilisearchService service = serviceWith(List.of(resolver));
+
+        service.apply(SplitByCategoryEntity.class, "$SNOMEDCT");
+
+        verify(index).updateFilterableAttributesSettings(new String[]{"category"});
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Map<String, String[]>> captor = org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(index).updateSynonymsSettings(captor.capture());
+        assertThat(captor.getValue()).containsOnlyKeys("rt");
+    }
+
+    @Test
+    void apply_withOverride_mergesSynonymsOntoTheResolvedSettings_withoutDroppingThem() throws MeilisearchException {
+        MeilisearchIndexSettingsResolver resolver = resolverFor(SplitByCategoryEntity.class, "$SNOMEDCT",
+                MeilisearchIndexSettings.builder().synonyms(Map.of("rt", new String[]{"right"})).build());
+        MeilisearchService service = serviceWith(List.of(resolver));
+        MeilisearchIndexSettings override = MeilisearchIndexSettings.builder()
+                .synonyms(Map.of("dm", new String[]{"diabetes mellitus"}))
+                .build();
+
+        service.apply(SplitByCategoryEntity.class, "$SNOMEDCT", override);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Map<String, String[]>> captor = org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(index).updateSynonymsSettings(captor.capture());
+        assertThat(captor.getValue()).containsOnlyKeys("rt", "dm");
+    }
+
+    @Test
+    void apply_worksForAnUnsplitEntity_withANullSplitFieldValue() throws MeilisearchException {
+        MeilisearchService service = serviceWith(List.of());
+
+        service.apply(org.rama.entity.testfixture.SyncToMeilisearchExtraSettingsEntity.class, null);
+
+        verify(index).updateSortableAttributesSettings(new String[]{"termLength"});
+    }
 }
