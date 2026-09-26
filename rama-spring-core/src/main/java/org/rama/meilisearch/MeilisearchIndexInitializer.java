@@ -112,18 +112,19 @@ public class MeilisearchIndexInitializer {
                 continue;
             }
             String indexName = meilisearchService.resolveIndexName(clazz, resolver.splitFieldValue());
-            if (!ensuredIndexes.markEnsured(indexName)) {
+            boolean appliedByThisResolver = ensuredIndexes.ensureInitialized(indexName, () -> {
+                try {
+                    String primaryKey = meilisearchService.resolvePrimaryKey(clazz);
+                    Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
+                    MeilisearchIndexSettingsApplier.apply(index, resolver.settings().layeredOver(base));
+                } catch (Exception ex) {
+                    LOGGER.error("Failed to sync split index '{}' for class '{}': {}", indexName, clazz.getSimpleName(), ex.getMessage(), ex);
+                }
+            });
+            if (!appliedByThisResolver) {
                 LOGGER.warn("Two MeilisearchIndexSettingsResolver beans both claim {} + \"{}\" -- "
                                 + "only the first one registered was applied to index '{}'",
                         clazz.getSimpleName(), resolver.splitFieldValue(), indexName);
-                continue;
-            }
-            try {
-                String primaryKey = meilisearchService.resolvePrimaryKey(clazz);
-                Index index = MeilisearchIndexes.getOrCreate(meilisearchClient, indexName, primaryKey);
-                MeilisearchIndexSettingsApplier.apply(index, resolver.settings().layeredOver(base));
-            } catch (Exception ex) {
-                LOGGER.error("Failed to sync split index '{}' for class '{}': {}", indexName, clazz.getSimpleName(), ex.getMessage(), ex);
             }
         }
     }
