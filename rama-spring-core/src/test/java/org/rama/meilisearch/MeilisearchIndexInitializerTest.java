@@ -77,7 +77,7 @@ class MeilisearchIndexInitializerTest {
         when(index.getSortableAttributesSettings()).thenReturn(new String[0]);
         when(index.getRankingRulesSettings()).thenReturn(new String[0]);
 
-        return new MeilisearchIndexInitializer(client, meilisearchService, basePackages, resolvers, new EnsuredMeilisearchIndexes());
+        return new MeilisearchIndexInitializer(client, meilisearchService, new SyncToMeilisearchEntities(basePackages), resolvers, new EnsuredMeilisearchIndexes());
     }
 
     /**
