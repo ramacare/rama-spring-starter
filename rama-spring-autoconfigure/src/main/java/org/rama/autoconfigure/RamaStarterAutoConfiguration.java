@@ -48,6 +48,7 @@ import org.rama.listener.global.GlobalPostUpdateRevisionListener;
 import org.rama.meilisearch.EnsuredMeilisearchIndexes;
 import org.rama.meilisearch.MeilisearchIndexInitializer;
 import org.rama.meilisearch.MeilisearchIndexSettingsResolver;
+import org.rama.meilisearch.SyncToMeilisearchEntities;
 import org.rama.meilisearch.listener.GlobalPostInsertMeilisearchListener;
 import org.rama.meilisearch.listener.GlobalPostUpdateMeilisearchListener;
 import org.rama.meilisearch.mapper.DefaultMeilisearchMapper;
@@ -809,6 +810,17 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(Client.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.meilisearch", name = "enabled", havingValue = "true", matchIfMissing = true)
+    SyncToMeilisearchEntities syncToMeilisearchEntities(BeanFactory beanFactory) {
+        List<String> basePackages = AutoConfigurationPackages.has(beanFactory)
+                ? AutoConfigurationPackages.get(beanFactory)
+                : Collections.emptyList();
+        return new SyncToMeilisearchEntities(basePackages);
+    }
+
+    @Bean
+    @ConditionalOnBean(Client.class)
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "rama.meilisearch", name = "enabled", havingValue = "true", matchIfMissing = true)
     MeilisearchService meilisearchService(ApplicationContext applicationContext, Client client, JsonMapper objectMapper, MeilisearchErrorHandler errorHandler,
                                            List<MeilisearchIndexSettingsResolver> settingsResolvers, EnsuredMeilisearchIndexes ensuredIndexes) {
         return new MeilisearchService(applicationContext, client, objectMapper, errorHandler, settingsResolvers, ensuredIndexes);
@@ -834,12 +846,9 @@ public class RamaStarterAutoConfiguration {
     @ConditionalOnBean(MeilisearchService.class)
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "rama.meilisearch", name = "initialize-indexes", havingValue = "true", matchIfMissing = true)
-    MeilisearchIndexInitializer meilisearchIndexInitializer(Client client, MeilisearchService meilisearchService, BeanFactory beanFactory,
+    MeilisearchIndexInitializer meilisearchIndexInitializer(Client client, MeilisearchService meilisearchService, SyncToMeilisearchEntities syncToMeilisearchEntities,
                                                              List<MeilisearchIndexSettingsResolver> settingsResolvers, EnsuredMeilisearchIndexes ensuredIndexes) {
-        List<String> basePackages = AutoConfigurationPackages.has(beanFactory)
-                ? AutoConfigurationPackages.get(beanFactory)
-                : Collections.emptyList();
-        return new MeilisearchIndexInitializer(client, meilisearchService, basePackages, settingsResolvers, ensuredIndexes);
+        return new MeilisearchIndexInitializer(client, meilisearchService, syncToMeilisearchEntities, settingsResolvers, ensuredIndexes);
     }
 
     @Bean
