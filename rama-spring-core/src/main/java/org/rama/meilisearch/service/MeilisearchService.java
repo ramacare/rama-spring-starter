@@ -5,7 +5,9 @@ import tools.jackson.databind.json.JsonMapper;
 import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Index;
 import com.meilisearch.sdk.SearchRequest;
+import com.meilisearch.sdk.exceptions.MeilisearchApiException;
 import com.meilisearch.sdk.exceptions.MeilisearchException;
+import com.meilisearch.sdk.model.IndexStats;
 import com.meilisearch.sdk.model.Searchable;
 import com.meilisearch.sdk.model.Task;
 import com.meilisearch.sdk.model.TaskInfo;
@@ -29,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 public class MeilisearchService {
@@ -198,6 +201,28 @@ public class MeilisearchService {
 
     public TaskInfo deleteAllDocuments(String indexName) throws MeilisearchException {
         return meilisearchClient.index(indexName).deleteAllDocuments();
+    }
+
+    /** Stats for {@code indexName}, or empty if it doesn't exist yet -- a known entity/split
+     * combination (see {@code MeilisearchIndexSettingsResolver}) can be perfectly valid without
+     * ever having had a document synced to it, so "not found" isn't an error case here. */
+    public Optional<IndexStats> getIndexStats(String indexName) throws MeilisearchException {
+        try {
+            return Optional.of(meilisearchClient.getIndex(indexName).getStats());
+        } catch (MeilisearchApiException ex) {
+            if ("index_not_found".equals(ex.getCode())) {
+                return Optional.empty();
+            }
+            throw ex;
+        }
+    }
+
+    /** Drops {@code indexName} entirely -- unlike {@link #deleteAllDocuments}, this also discards
+     * its settings, not just its documents. The next {@link #sync} or {@link #applySettings} call
+     * recreates it fresh via the matching resolver/annotation. */
+    public void deleteIndex(String indexName) throws MeilisearchException {
+        TaskInfo taskInfo = meilisearchClient.deleteIndex(indexName);
+        meilisearchClient.waitForTask(taskInfo.getTaskUid());
     }
 
     public ArrayList<HashMap<String, Object>> search(String indexName, String query) throws MeilisearchException {
