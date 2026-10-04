@@ -225,7 +225,7 @@ public class DocxTemplateProcessor implements TemplateProcessor {
                 Optional<byte[]> imageBytes = replacementProcessor.processBytes(replacementKey, replacements, attributeData);
 
                 if (imageBytes.isPresent() && imageBytes.get().length > 0) {
-                    replacePlaceholder.replacePlaceholderInParagraph(paragraph, placeholder, imageBytes.get(), width, height);
+                    replacePlaceholder.replacePlaceholderInParagraph(paragraph, placeholder, imageBytes.get(), width, height, attributeData.containsKey("fit"));
                 } else {
                     replacePlaceholder.replacePlaceholderInParagraph(paragraph, placeholder, "");
                 }
