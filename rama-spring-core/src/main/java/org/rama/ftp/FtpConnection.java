@@ -47,6 +47,11 @@ public class FtpConnection {
         }
     }
 
+    /**
+     * Runs {@code fn} against the shared client. On an {@link IOException} the connection is
+     * re-established and {@code fn} is invoked <b>a second time</b>, so it must be safe to replay:
+     * open any upload stream inside the lambda rather than capturing one from outside.
+     */
     public <T> T withClient(IOFunction<FTPClient, T> fn) {
         lock.lock();
         try {
