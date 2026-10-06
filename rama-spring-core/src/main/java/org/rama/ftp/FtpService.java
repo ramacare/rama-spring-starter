@@ -22,6 +22,7 @@ public class FtpService {
         this.ftpProperties = ftpProperties;
     }
 
+    /** {@code fn} may run twice — see {@link FtpConnection#withClient}. */
     public <T> T withClient(String server, FtpConnection.IOFunction<FTPClient, T> fn) {
         return ftpConnectionManager.get(server).withClient(fn);
     }
@@ -43,11 +44,24 @@ public class FtpService {
     }
 
     public void upload(String server, String remoteDir, String filename, InputStream data, boolean createDirs) {
+        // Buffer once: FtpConnection.withClient replays the lambda after an IOException, and a
+        // replayed STOR on an already-consumed stream stores an empty/truncated file as success (#62).
+        byte[] bytes;
+        try (InputStream in = data) {
+            bytes = in.readAllBytes();
+        } catch (IOException e) {
+            throw new RuntimeException("FTP error: cannot read upload data for " + filename + ": " + e.getMessage(), e);
+        }
+        uploadBytes(server, remoteDir, filename, bytes, createDirs);
+    }
+
+    private void uploadBytes(String server, String remoteDir, String filename, byte[] bytes, boolean createDirs) {
         ftpConnectionManager.get(server).withClient(client -> {
             if (createDirs) ensureDirectories(client, remoteDir);
             if (!client.changeWorkingDirectory(remoteDir))
                 throw new IOException("Cannot change to directory: " + remoteDir);
-            try (InputStream in = data) {
+            // fresh stream per attempt, so a replay re-sends the whole payload
+            try (InputStream in = new ByteArrayInputStream(bytes)) {
                 if (!client.storeFile(filename, in))
                     throw new IOException("Upload failed: " + filename + " reply=" + client.getReplyString());
             }
@@ -75,7 +89,7 @@ public class FtpService {
 
     public void writeText(String server, String remoteDir, String filename, String content, boolean createDirs, Charset charset) {
         remoteDir = (remoteDir == null || remoteDir.isEmpty()) ? ftpProperties.getServers().get(server).getOutboundFolder() : remoteDir;
-        upload(server, remoteDir, filename, new ByteArrayInputStream(content.getBytes(charset)), createDirs);
+        uploadBytes(server, remoteDir, filename, content.getBytes(charset), createDirs);
     }
 
     public void writeText(String server, String remoteDir, String filename, String content, boolean createDirs) {
