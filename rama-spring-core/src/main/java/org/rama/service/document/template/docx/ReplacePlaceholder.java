@@ -52,6 +52,14 @@ public class ReplacePlaceholder {
     }
 
     /**
+     * @param fit when both {@code width} and {@code height} are set, scale the image to fit inside
+     *            that box with its aspect ratio kept, instead of stretching it to the box
+     */
+    public void replacePlaceholderInParagraph(XWPFParagraph paragraph, String placeholder, byte[] imageBytes, double width, double height, boolean fit) {
+        replacePlaceholderInParagraph(paragraph, placeholder, "", imageBytes, width, height, fit);
+    }
+
+    /**
      * Drop-in optimized:
      * - bytes-first for images (no InputStream reset games)
      * - detect type on bytes
@@ -59,6 +67,10 @@ public class ReplacePlaceholder {
      * - compute size once
      */
     public void replacePlaceholderInParagraph(XWPFParagraph paragraph, String placeholder, String replacement, byte[] imageBytes, double width, double height) {
+        replacePlaceholderInParagraph(paragraph, placeholder, replacement, imageBytes, width, height, false);
+    }
+
+    public void replacePlaceholderInParagraph(XWPFParagraph paragraph, String placeholder, String replacement, byte[] imageBytes, double width, double height, boolean fit) {
         List<XWPFRun> runs = paragraph.getRuns();
         if (runs == null || runs.isEmpty()) return;
 
@@ -88,7 +100,7 @@ public class ReplacePlaceholder {
             // optional image insert
             if (imageBytes != null && imageBytes.length > 0) {
                 try {
-                    addPictureToRun(newRun, imageBytes, width, height);
+                    addPictureToRun(newRun, imageBytes, width, height, fit);
                 } catch (Exception e) {
                     log.error("replacePlaceholderInParagraph image insert failed: {}", e.getMessage());
                 }
@@ -151,19 +163,14 @@ public class ReplacePlaceholder {
                     long width = inline.getExtent().getCx();
                     long height = inline.getExtent().getCy();
 
-                    // fixedWidth/fixedHeight recalculation based on aspect ratio
-                    if (attributeData.containsKey("fixedWidth") || attributeData.containsKey("fixedHeight")) {
+                    // fit / fixedWidth / fixedHeight recalculate the dummy's extent from the image's aspect ratio
+                    ImageSizing sizing = ImageSizing.of(attributeData);
+                    if (sizing != ImageSizing.STRETCH) {
                         BufferedImage img = ImageIO.read(new ByteArrayInputStream(imageBytes));
                         if (img != null) {
-                            int w = img.getWidth();
-                            int h = img.getHeight();
-                            float aspect = (w > 0) ? ((float) h / (float) w) : 1f;
-
-                            if (attributeData.containsKey("fixedWidth")) {
-                                height = Math.round(width * aspect);
-                            } else {
-                                width = (aspect > 0) ? Math.round(height / aspect) : height;
-                            }
+                            long[] size = sizeInBox(img.getWidth(), img.getHeight(), width, height, sizing);
+                            width = size[0];
+                            height = size[1];
                         }
                     }
                     paragraph.removeRun(i);
@@ -255,7 +262,7 @@ public class ReplacePlaceholder {
     // Helpers
     // =====================================================================================
 
-    private void addPictureToRun(XWPFRun run, byte[] inputBytes, double widthInInches, double heightInInches) throws Exception {
+    private void addPictureToRun(XWPFRun run, byte[] inputBytes, double widthInInches, double heightInInches, boolean fit) throws Exception {
         PictureData pic = normalizeToPoiPicture(inputBytes);
 
         // compute size
@@ -282,12 +289,48 @@ public class ReplacePlaceholder {
         } else if (widthInInches == 0) {
             emuH = Units.toEMU(heightInInches * 72.0);
             emuW = (aspect > 0) ? Math.round(emuH / aspect) : emuH;
+        } else if (fit) {
+            long[] size = sizeInBox(pxW, pxH, Units.toEMU(widthInInches * 72.0), Units.toEMU(heightInInches * 72.0), ImageSizing.FIT);
+            emuW = (int) size[0];
+            emuH = (int) size[1];
         } else {
             emuW = Units.toEMU(widthInInches * 72.0);
             emuH = Units.toEMU(heightInInches * 72.0);
         }
 
         run.addPicture(new ByteArrayInputStream(pic.bytes), pic.type, null, emuW, emuH);
+    }
+
+    /**
+     * Size of an {@code imgW}×{@code imgH} image placed in a {@code boxW}×{@code boxH} box (any unit).
+     * FIT keeps the aspect ratio and scales to the largest size that stays inside the box.
+     */
+    static long[] sizeInBox(int imgW, int imgH, long boxW, long boxH, ImageSizing sizing) {
+        if (imgW <= 0 || imgH <= 0) return new long[]{boxW, boxH};
+        return switch (sizing) {
+            case STRETCH -> new long[]{boxW, boxH};
+            case FIXED_WIDTH -> new long[]{boxW, Math.round((double) boxW * imgH / imgW)};
+            case FIXED_HEIGHT -> new long[]{Math.round((double) boxH * imgW / imgH), boxH};
+            case FIT -> {
+                double scale = Math.min((double) boxW / imgW, (double) boxH / imgH);
+                yield new long[]{
+                        Math.min(boxW, Math.round(imgW * scale)),
+                        Math.min(boxH, Math.round(imgH * scale))
+                };
+            }
+        };
+    }
+
+    enum ImageSizing {
+        STRETCH, FIT, FIXED_WIDTH, FIXED_HEIGHT;
+
+        /** {@code fit} wins over {@code fixedWidth}, which wins over {@code fixedHeight}; default is {@code stretch}. */
+        static ImageSizing of(Map<String, String> attributes) {
+            if (attributes.containsKey("fit")) return FIT;
+            if (attributes.containsKey("fixedWidth")) return FIXED_WIDTH;
+            if (attributes.containsKey("fixedHeight")) return FIXED_HEIGHT;
+            return STRETCH;
+        }
     }
 
     private Optional<byte[]> resolveImageBytes(String replacementKey, Map<String, Object> replacements, Map<String, String> attributeData, String replacement) throws Exception {
