@@ -1,7 +1,9 @@
 package org.rama.service.idempotency;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.rama.util.EncryptionUtil;
 import tools.jackson.core.type.TypeReference;
 
 import java.lang.reflect.Type;
@@ -15,6 +17,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ResponseCodecTest {
 
     private final ResponseCodec codec = new ResponseCodec();
+
+    @AfterEach
+    void clearKey() {
+        EncryptionUtil.setKey(null);
+    }
 
     @Test
     void nullEncodesToNull() {
@@ -77,6 +84,40 @@ class ResponseCodecTest {
         Object back = codec.decode(json, t);
 
         assertThat(back).isEqualTo(original);
+    }
+
+    record Point(int x, int y) {}
+
+    @Test
+    void recordWithoutDefaultConstructor_stillRoundTrips() {
+        String json = codec.encode(new Point(1, 2));
+
+        assertThat(codec.decode(json, Point.class)).isEqualTo(new Point(1, 2));
+    }
+
+    @Test
+    void missingBody_decodesToEmptyOptionalForOptionalReturnType() {
+        Type t = new TypeReference<Optional<String>>() {}.getType();
+
+        assertThat(codec.decode(null, t)).isEqualTo(Optional.empty());
+    }
+
+    @Test
+    void withKey_bodyIsEncryptedAndRoundTrips() {
+        EncryptionUtil.setKey("0123456789abcdef0123456789abcdef");
+
+        String stored = codec.encode("citizen-1234567890123");
+
+        assertThat(stored).doesNotContain("citizen");
+        assertThat(codec.decode(stored, String.class)).isEqualTo("citizen-1234567890123");
+    }
+
+    @Test
+    void withKey_plaintextRowFromBeforeEncryption_stillReplays() {
+        String plaintextRow = codec.encode("written-unencrypted");
+        EncryptionUtil.setKey("0123456789abcdef0123456789abcdef");
+
+        assertThat(codec.decode(plaintextRow, String.class)).isEqualTo("written-unencrypted");
     }
 
     public static class Payload {
