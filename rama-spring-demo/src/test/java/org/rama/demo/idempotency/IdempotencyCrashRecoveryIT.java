@@ -10,6 +10,7 @@ import org.rama.entity.system.SystemRequestDedup.Status;
 import org.rama.repository.system.SystemRequestDedupRepository;
 import org.rama.service.environment.EnvironmentService;
 import org.rama.service.idempotency.SignatureResolver;
+import org.rama.util.EncryptionUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -88,7 +89,8 @@ class IdempotencyCrashRecoveryIT {
 
         SystemRequestDedup after = repository.findById(signature).orElseThrow();
         assertThat(after.getStatus()).isEqualTo(Status.COMPLETED);
-        assertThat(after.getResponseJson()).isEqualTo("\"paid-123-#1\"");
+        // Stored encrypted at rest (starter#64); compare the decrypted body.
+        assertThat(EncryptionUtil.decrypt(after.getResponseJson())).isEqualTo("\"paid-123-#1\"");
     }
 
     @Slf4j
