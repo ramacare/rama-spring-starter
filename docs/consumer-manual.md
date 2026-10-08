@@ -108,6 +108,35 @@ self-invocation and no transaction from the job applied.
 Check `QRTZ_TRIGGERS` for a row in group `rama-idempotency` after upgrading to confirm it took.
 See starter#47.
 
+### Upgrading past 4.5.7 — `@IdempotentMutation` no longer rolls back successful work
+
+The dedup cache serializes a mutation's response inside the mutation's own transaction. Three
+defects in that step are fixed (starter#64):
+
+- **Lazy JPA relations are no longer loaded.** Jackson used to walk into an uninitialized
+  Hibernate proxy. A lazy `@ManyToOne` to a row that does not exist locally threw and **rolled
+  back the mutation that had just succeeded**; one that did exist dragged the whole related
+  entity into the cache. An unloaded relation is now left out of the cached response, and any
+  other encoding failure keeps the work and completes the row without a body.
+- **The cached body is encrypted at rest** with `encrypt.key`. A response can carry fields that
+  are column-encrypted on the entity (a citizen ID, say), which are plaintext once loaded. Rows
+  written in plaintext before the upgrade still replay.
+- **`IdempotencyAspect` is ordered** (`rama.idempotency.aspect-order`, default `1000`). It used to
+  tie with every unordered consumer aspect; when a consumer's `@AfterReturning` aspect won the
+  tie, its side effect re-fired on every replay.
+
+What changes for you:
+
+- **A replay returns lazy relations only if the first call loaded them.** An unloaded one comes
+  back `null` (GraphQL: the nested field resolves to `null` on the duplicate request only).
+  Load the relation inside the mutation if duplicates must see it.
+- **A replay of a response that could not be cached returns no body**: `null`, or
+  `Optional.empty()` for an `Optional` return type. Look for the `could not be cached` WARN.
+- **Aspects on `@IdempotentMutation` methods now run inside it** unless they are ordered below
+  `1000`. A side effect fires once per *distinct* request, not once per call. If you relied on
+  it firing for duplicates, give your aspect an `@Order` lower than `rama.idempotency.aspect-order`.
+- Without `encrypt.key` the body stays plaintext, with one WARN at first use.
+
 ## 1. Add the Dependency
 
 ```xml
@@ -224,6 +253,7 @@ rama:
     header-name: Idempotency-Key
     default-ttl: 30s                 # TTL for any @IdempotentMutation that sets no ttl of its own
     cleanup-interval: 5m             # How often the Quartz job evicts expired rows
+    aspect-order: 1000               # Inside Spring Security (100–600), outside @Transactional + unordered aspects
     cors:
       augment: true                  # Inject header-name into any CorsConfigurationSource bean
 ```
