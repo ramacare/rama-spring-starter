@@ -135,7 +135,7 @@ public class IdempotencyService {
                     throw new RuntimeException(t);
                 }
                 row.setStatus(Status.COMPLETED);
-                row.setResponseJson(responseCodec.encode(result));
+                row.setResponseJson(encodeOrDrop(signature, row.getMethod(), result));
                 row.setExpiresAt(expiresAt);
                 repository.save(row);
                 return result;
@@ -143,6 +143,22 @@ public class IdempotencyService {
         } catch (Throwable outer) {
             if (thrown[0] != null) throw thrown[0];
             throw outer;
+        }
+    }
+
+    /**
+     * The work has already run and its writes are in this transaction, so a response
+     * that cannot be cached must not take them down with it. The row still completes
+     * — a duplicate is suppressed — but replays carry no body ({@code null}, or
+     * {@code Optional.empty()} for an {@code Optional} return type). See starter#64.
+     */
+    private String encodeOrDrop(String signature, String method, Object result) {
+        try {
+            return responseCodec.encode(result);
+        } catch (RuntimeException e) {
+            log.warn("idempotency response for {} could not be cached; duplicates of signature={} will replay "
+                    + "without a body until the row expires", method, signature, e);
+            return null;
         }
     }
 

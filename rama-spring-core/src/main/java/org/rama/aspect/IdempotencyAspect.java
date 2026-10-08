@@ -12,6 +12,7 @@ import org.rama.service.idempotency.IdempotencyProperties;
 import org.rama.service.idempotency.IdempotencyService;
 import org.rama.service.idempotency.SignatureResolver;
 import org.springframework.boot.convert.DurationStyle;
+import org.springframework.core.Ordered;
 
 import java.lang.reflect.Type;
 import java.time.Clock;
@@ -26,11 +27,16 @@ import java.time.OffsetDateTime;
  *   2. {@link IdempotencyService#lockAndExecute} — locks the row, branches on
  *      status, runs the underlying mutation (joining this transaction) if needed,
  *      writes the response back, commits.
+ *
+ * Ordered via {@code rama.idempotency.aspect-order}. Left unordered it tied with
+ * every consumer aspect at {@code LOWEST_PRECEDENCE}; when a consumer's
+ * {@code @AfterReturning} aspect won the tie it wrapped this one and re-fired its
+ * side effect on every replay. See starter#64.
  */
 @Slf4j
 @Aspect
 @RequiredArgsConstructor
-public class IdempotencyAspect {
+public class IdempotencyAspect implements Ordered {
 
     private final IdempotencyService idempotencyService;
     private final SignatureResolver signatureResolver;
@@ -75,6 +81,11 @@ public class IdempotencyAspect {
             if (thrownByWork[0] != null) throw thrownByWork[0];
             throw outer;
         }
+    }
+
+    @Override
+    public int getOrder() {
+        return properties.getAspectOrder();
     }
 
     private Duration parseTtl(String spec) {
