@@ -1,5 +1,6 @@
 package org.rama.service;
 
+import io.netty.channel.ChannelOption;
 import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -11,16 +12,20 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
+import reactor.netty.http.client.HttpClient;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,11 +37,21 @@ public class GenericApiService {
     private final WebClient webClient;
     private final JsonMapper objectMapper;
 
-    public GenericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, JsonMapper objectMapper) {
+    public GenericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, JsonMapper objectMapper, Duration connectTimeout, Duration responseTimeout) {
         this.apiRepository = apiRepository;
         this.apiHeaderSetRepository = apiHeaderSetRepository;
-        this.webClient = webClientBuilder.build();
         this.objectMapper = objectMapper;
+
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(connectTimeout.toMillis()))
+                .responseTimeout(responseTimeout);
+
+        // Clone the (shared, singleton) builder before attaching the connector so the timeout
+        // stays scoped to this service and never leaks into the WebClient.Builder other beans
+        // (e.g. PdfService) build from.
+        this.webClient = webClientBuilder.clone()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .build();
     }
 
     public <T, U> Optional<T> callApi(String apiId, U requestBody, Map<String, String> queryParams, Map<String, String> headers, boolean throwError, ParameterizedTypeReference<T> returnType) {
@@ -49,16 +64,21 @@ public class GenericApiService {
         }
 
         Api api = apiOpt.get();
+        HttpMethod method = null;
+        String host = null;
+        long startNanos = System.nanoTime();
         try {
             String uri = resolveUri(api.getSourceApiUrl(), queryParams);
+            URI targetUri = UriComponentsBuilder.fromUriString(uri).build(true).toUri();
+            host = targetUri.getHost();
             Map<String, String> finalHeaders = buildFinalHeaders(api, headers);
             String contentTypeValue = finalHeaders.getOrDefault("Content-Type", MediaType.APPLICATION_JSON_VALUE);
             MediaType contentType = MediaType.parseMediaType(contentTypeValue);
-            HttpMethod method = HttpMethod.valueOf(api.getSourceApiMethod());
+            method = HttpMethod.valueOf(api.getSourceApiMethod());
 
             ResponseEntity<T> response = webClient
                     .method(method)
-                    .uri(UriComponentsBuilder.fromUriString(uri).build(true).toUri())
+                    .uri(targetUri)
                     .contentType(contentType)
                     .accept(MediaType.APPLICATION_JSON)
                     .headers(httpHeaders -> {
@@ -79,14 +99,18 @@ public class GenericApiService {
                     .toEntity(returnType)
                     .block();
 
+            Integer status = response != null ? response.getStatusCode().value() : null;
+            logApiCall(apiId, method, host, status, elapsedMillis(startNanos), "success");
+
             if (response != null && response.hasBody()) {
-                log.debug("API [{}] called successfully", apiId);
                 return Optional.ofNullable(response.getBody());
             }
             return Optional.empty();
         } catch (Exception ex) {
-            log.error("API [{}] failed. exceptionType={}, message={}",
-                    apiId, ex.getClass().getName(), ex.getMessage());
+            Integer status = ex instanceof WebClientResponseException wcre ? wcre.getStatusCode().value() : null;
+            logApiCall(apiId, method, host, status, elapsedMillis(startNanos), "failure");
+            log.error("API [{}] failed. host={}, exceptionType={}, message={}",
+                    apiId, host, ex.getClass().getName(), ex.getMessage());
             if (!throwError && ex instanceof WebClientResponseException responseException) {
                 try {
                     T entity = responseException.getResponseBodyAs(returnType);
@@ -99,6 +123,19 @@ public class GenericApiService {
             }
             return Optional.empty();
         }
+    }
+
+    private static long elapsedMillis(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000L;
+    }
+
+    /**
+     * Structured, per-call latency line so an incident can pin the slow backend directly:
+     * api id, HTTP method, target host, response status (when known), duration and outcome.
+     */
+    private void logApiCall(String apiId, HttpMethod method, String host, Integer status, long durationMs, String outcome) {
+        log.info("API call apiId={} method={} host={} status={} durationMs={} outcome={}",
+                apiId, method, host, status, durationMs, outcome);
     }
 
     public <T, U> Optional<T> callApi(String apiId, U requestBody, Map<String, String> queryParams) {

@@ -20,6 +20,7 @@ public class RamaStarterProperties {
     private final Quartz quartz = new Quartz();
     private final Ftp ftp = new Ftp();
     private final ApiKey apiKey = new ApiKey();
+    private final Api api = new Api();
 
     @Data
     public static class Jpa {
@@ -73,5 +74,19 @@ public class RamaStarterProperties {
     @Data
     public static class ApiKey {
         private boolean enabled = false;
+    }
+
+    /**
+     * Outbound HTTP settings for {@link org.rama.service.GenericApiService}. These bound the
+     * {@code WebClient} used by {@code callApi} so a slow or unresponsive upstream can never
+     * block the calling thread indefinitely (which, during an incident, holds DB connections
+     * and contributes to Hikari pool exhaustion -- see starter#66).
+     */
+    @Data
+    public static class Api {
+        /** Maximum time to establish the TCP connection to an upstream API. */
+        private Duration connectTimeout = Duration.ofSeconds(10);
+        /** Maximum time to wait for the upstream response after the request is sent. */
+        private Duration responseTimeout = Duration.ofSeconds(15);
     }
 }
