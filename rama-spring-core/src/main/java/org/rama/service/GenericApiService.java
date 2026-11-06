@@ -42,16 +42,21 @@ public class GenericApiService {
         this.apiHeaderSetRepository = apiHeaderSetRepository;
         this.objectMapper = objectMapper;
 
-        HttpClient httpClient = HttpClient.create()
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(connectTimeout.toMillis()))
-                .responseTimeout(responseTimeout);
-
         // Clone the (shared, singleton) builder before attaching the connector so the timeout
         // stays scoped to this service and never leaks into the WebClient.Builder other beans
         // (e.g. PdfService) build from.
         this.webClient = webClientBuilder.clone()
-                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .clientConnector(new ReactorClientHttpConnector(createHttpClient(connectTimeout, responseTimeout)))
                 .build();
+    }
+
+    static HttpClient createHttpClient(Duration connectTimeout, Duration responseTimeout) {
+        // compress(true) is explicit because only the no-arg ReactorClientHttpConnector applies
+        // it by default; the constructor taking an HttpClient uses the client exactly as given.
+        return HttpClient.create()
+                .compress(true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(connectTimeout.toMillis()))
+                .responseTimeout(responseTimeout);
     }
 
     public <T, U> Optional<T> callApi(String apiId, U requestBody, Map<String, String> queryParams, Map<String, String> headers, boolean throwError, ParameterizedTypeReference<T> returnType) {
@@ -76,6 +81,9 @@ public class GenericApiService {
             MediaType contentType = MediaType.parseMediaType(contentTypeValue);
             method = HttpMethod.valueOf(api.getSourceApiMethod());
 
+            // Restarted here because buildFinalHeaders can wait on a DB connection, and that wait
+            // must not be reported as latency of the upstream host.
+            startNanos = System.nanoTime();
             ResponseEntity<T> response = webClient
                     .method(method)
                     .uri(targetUri)
