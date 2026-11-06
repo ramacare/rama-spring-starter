@@ -15,6 +15,8 @@ Most starter beans use `@ConditionalOnMissingBean`. Declare your own bean of the
 | `RuntimeWiringConfigurer` | Email validation + BigDecimal scalar | Custom GraphQL wiring |
 | `StarterGraphqlExceptionResolver` | Generic error formatting | Custom error responses |
 
+**`WebClient.Builder` and `GenericApiService`:** `GenericApiService` clones the builder and replaces the clone's connector with a Reactor Netty connector that carries the `rama.api.*` timeouts. Codec limits set on your builder still apply to `callApi`, but a connector you set, for example for a proxy or custom TLS, does not. Other beans that build from the builder, such as `PdfService`, keep your connector.
+
 ## Replacement Hooks (auto-wired)
 
 Extend document template processing with custom hooks. Declare either as a `@Component` and the starter collects it — `RamaStarterAutoConfiguration` gathers every `ReplacementObjectHook` and `ReplacementStringHook` bean into `ReplacementHooks`, which `ReplacementProcessor` invokes on every placeholder. No wiring on your side:
