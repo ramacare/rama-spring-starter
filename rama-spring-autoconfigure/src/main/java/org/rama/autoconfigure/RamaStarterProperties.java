@@ -77,16 +77,19 @@ public class RamaStarterProperties {
     }
 
     /**
-     * Outbound HTTP settings for {@link org.rama.service.GenericApiService}. These bound the
-     * {@code WebClient} used by {@code callApi} so a slow or unresponsive upstream can never
-     * block the calling thread indefinitely (which, during an incident, holds DB connections
-     * and contributes to Hikari pool exhaustion -- see starter#66).
+     * Outbound HTTP settings for {@link org.rama.service.GenericApiService}. These stop
+     * {@code callApi} waiting on an unreachable or silent upstream, which during an incident
+     * holds DB connections and contributes to Hikari pool exhaustion (see starter#66).
+     *
+     * <p>They are not a total deadline for the call: an upstream that keeps trickling data can
+     * run past {@code responseTimeout}, and the wait for a pooled connection is limited
+     * separately by Reactor Netty's pending-acquire timeout (45s by default).
      */
     @Data
     public static class Api {
         /** Maximum time to establish the TCP connection to an upstream API. */
-        private Duration connectTimeout = Duration.ofSeconds(10);
-        /** Maximum time to wait for the upstream response after the request is sent. */
+        private Duration connectTimeout = Duration.ofSeconds(3);
+        /** Maximum interval between network reads of the upstream response; not a limit on the whole call. */
         private Duration responseTimeout = Duration.ofSeconds(15);
     }
 }
