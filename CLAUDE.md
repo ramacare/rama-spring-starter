@@ -149,6 +149,10 @@ Jackson mappers are framed in the JVM default time zone, not Jackson's built-in 
 - `rama.ftp.enabled` -- FTP connection manager (default `false`)
 - `rama.security.api-key.enabled` -- API key authentication filter
 
+**Outbound API client** (`GenericApiService.callApi`, prefixed `rama.api.`):
+- `rama.api.connect-timeout` -- TCP connect timeout for outbound API calls (default `10s`)
+- `rama.api.response-timeout` -- response timeout once the request is sent (default `15s`). These bound the `WebClient` used by `callApi` (via a cloned builder + Reactor Netty connector, so the shared `WebClient.Builder` other beans build from is untouched) so a slow upstream aborts instead of blocking the calling thread — and holding a DB connection — indefinitely. `callApi` also emits a structured INFO latency line per call (`apiId`, `method`, `host`, `status`, `durationMs`, `outcome`) so an incident can pin the slow backend directly. See starter#66
+
 **Quartz properties** (Spring Boot, not `rama.` prefix):
 - There is **no `spring.quartz.enabled`**. It is not a Spring Boot property (grep the 4.0.3
   configuration metadata) and the starter does not implement one, so setting it does nothing. To

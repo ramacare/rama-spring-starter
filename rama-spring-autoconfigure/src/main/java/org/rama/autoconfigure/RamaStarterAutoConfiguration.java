@@ -324,8 +324,9 @@ public class RamaStarterAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean({ApiRepository.class, ApiHeaderSetRepository.class})
-    GenericApiService genericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, JsonMapper objectMapper) {
-        return new GenericApiService(apiRepository, apiHeaderSetRepository, webClientBuilder, objectMapper);
+    GenericApiService genericApiService(ApiRepository apiRepository, ApiHeaderSetRepository apiHeaderSetRepository, WebClient.Builder webClientBuilder, JsonMapper objectMapper, RamaStarterProperties properties) {
+        return new GenericApiService(apiRepository, apiHeaderSetRepository, webClientBuilder, objectMapper,
+                properties.getApi().getConnectTimeout(), properties.getApi().getResponseTimeout());
     }
 
     @Bean
