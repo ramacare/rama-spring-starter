@@ -20,6 +20,7 @@ public class RamaStarterProperties {
     private final Quartz quartz = new Quartz();
     private final Ftp ftp = new Ftp();
     private final ApiKey apiKey = new ApiKey();
+    private final Api api = new Api();
 
     @Data
     public static class Jpa {
@@ -73,5 +74,22 @@ public class RamaStarterProperties {
     @Data
     public static class ApiKey {
         private boolean enabled = false;
+    }
+
+    /**
+     * Outbound HTTP settings for {@link org.rama.service.GenericApiService}. These stop
+     * {@code callApi} waiting on an unreachable or silent upstream, which during an incident
+     * holds DB connections and contributes to Hikari pool exhaustion (see starter#66).
+     *
+     * <p>They are not a total deadline for the call: an upstream that keeps trickling data can
+     * run past {@code responseTimeout}, and the wait for a pooled connection is limited
+     * separately by Reactor Netty's pending-acquire timeout (45s by default).
+     */
+    @Data
+    public static class Api {
+        /** Maximum time to establish the TCP connection to an upstream API. */
+        private Duration connectTimeout = Duration.ofSeconds(3);
+        /** Maximum interval between network reads of the upstream response; not a limit on the whole call. */
+        private Duration responseTimeout = Duration.ofSeconds(15);
     }
 }
