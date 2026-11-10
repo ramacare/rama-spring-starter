@@ -6,7 +6,9 @@ import org.rama.annotation.VolatileForIdempotency;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -75,6 +77,59 @@ class CanonicalJsonTest {
         b.put("y", "two");
         b.put("x", 1);
         assertThat(CanonicalJson.stringify(a)).isEqualTo(CanonicalJson.stringify(b));
+    }
+
+    /**
+     * starter#67. Rama mutations take {@code @Argument Map<String, Object> input}; the
+     * volatile names used to be stripped from POJO properties only, so on a map they
+     * reached the hash and every request signed differently.
+     */
+    @Test
+    void hardcodedVolatileNamesAreStrippedFromMapInput() {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("name", "x");
+        input.put("requestDatetime", "2026-11-10T10:00:00Z");
+        input.put("traceId", "abc");
+
+        assertThat(CanonicalJson.stringify(new Object[]{input})).isEqualTo("[{\"name\":\"x\"}]");
+    }
+
+    @Test
+    void volatileNamesAreStrippedAtAnyDepth() {
+        VolatileBean bean = new VolatileBean();
+        bean.amount = 5;
+        bean.traceId = "in-pojo";
+        Map<String, Object> line = new LinkedHashMap<>();
+        line.put("qty", 2);
+        line.put("traceId", "in-list");
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("lines", List.of(line));
+        input.put("payment", bean);
+        input.put("meta", Map.of("requestDatetime", "2026-11-10T10:00:00Z"));
+
+        assertThat(CanonicalJson.stringify(new Object[]{input}))
+                .isEqualTo("[{\"lines\":[{\"qty\":2}],\"meta\":{},\"payment\":{\"amount\":5}}]");
+    }
+
+    @Test
+    void extraVolatileNamesAreStrippedFromMapsAndPojos() {
+        Bean bean = new Bean();
+        bean.name = "kept";
+        bean.priority = 3;
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("clientStamp", 1731232800000L);
+        input.put("bean", bean);
+
+        String json = CanonicalJson.stringify(input, Set.of("clientStamp", "priority"));
+
+        assertThat(json).isEqualTo("{\"bean\":{\"active\":false,\"name\":\"kept\"}}");
+    }
+
+    @Test
+    void nullAndScalarRootsStillStringify() {
+        assertThat(CanonicalJson.stringify(null)).isEqualTo("null");
+        assertThat(CanonicalJson.stringify(new Object[]{})).isEqualTo("[]");
+        assertThat(CanonicalJson.stringify(new Object[]{42L, "x"})).isEqualTo("[42,\"x\"]");
     }
 
     public static class Bean {
