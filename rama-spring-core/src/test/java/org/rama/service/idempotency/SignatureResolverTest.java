@@ -11,11 +11,12 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -29,6 +30,9 @@ class SignatureResolverTest {
 
     private final IdempotencyProperties properties = new IdempotencyProperties();
 
+    private static final Method PAY = method("pay");
+    private static final Method REFUND = method("refund");
+
     @AfterEach
     void clearRequestContext() {
         RequestContextHolder.resetRequestAttributes();
@@ -39,84 +43,101 @@ class SignatureResolverTest {
         given(environmentService.getCurrentUsername()).willReturn("alice");
         setRequestWithHeader("Idempotency-Key", "client-uuid-42");
 
-        SignatureResolver resolver = new SignatureResolver(
-                environmentService, properties, fixedClock("2026-05-15T00:00:00Z"));
+        SignatureResolver.Resolution r = resolver().resolve(PAY, new Object[]{"anything"});
 
-        String sig = resolver.resolve(new Object[]{"anything"});
-
-        assertThat(sig).hasSize(64);
-        assertThat(sig).isEqualTo(sha256Hex("h:client-uuid-42|alice"));
+        assertThat(r.keyed()).isTrue();
+        assertThat(r.signature()).hasSize(64);
+        assertThat(r.signature()).isEqualTo(sha256Hex("h:client-uuid-42|alice"));
     }
 
+    /**
+     * starter#67: the header-less signature used to start with {@code floor(now, 1s)}, so
+     * two identical calls deduplicated only when they fell in the same wall-clock second.
+     * It now carries no time component at all — the window comes from the row's
+     * {@code expires_at} instead.
+     */
     @Test
-    void fallbackPath_includesSecondBucketUsernameAndArgs() {
+    @Tag("issue-67")
+    @Tag("TC-67-01")
+    void fallbackPath_hashesMethodUsernameAndArgs_withNoTimeComponent() {
         given(environmentService.getCurrentUsername()).willReturn("bob");
-        Clock c = fixedClock("2026-05-15T00:00:42.500Z");
-
-        SignatureResolver resolver = new SignatureResolver(environmentService, properties, c);
         Object[] args = {42, "make-payment"};
 
-        String sig = resolver.resolve(args);
+        SignatureResolver.Resolution r = resolver().resolve(PAY, args);
 
-        long bucket = Instant.parse("2026-05-15T00:00:42.500Z").getEpochSecond();
-        String expected = sha256Hex("t:" + bucket + "|bob|" + CanonicalJson.stringify(args));
-        assertThat(sig).isEqualTo(expected);
+        assertThat(r.keyed()).isFalse();
+        assertThat(r.signature()).isEqualTo(
+                sha256Hex("c:" + SignatureResolver.methodKey(PAY) + "|bob|" + CanonicalJson.stringify(args)));
+    }
+
+    /** starter#67: the method was stored on the row but never hashed, so equal args collided across mutations. */
+    @Test
+    @Tag("issue-67")
+    @Tag("TC-67-02")
+    void fallbackPath_differentMethodsWithEqualArgs_produceDifferentSignatures() {
+        given(environmentService.getCurrentUsername()).willReturn("carol");
+        Object[] args = {42L, "INV-1"};
+
+        assertThat(resolver().resolve(PAY, args).signature())
+                .isNotEqualTo(resolver().resolve(REFUND, args).signature());
     }
 
     @Test
-    void sameInputsProduceSameSignature() {
+    void sameMethodAndInputsProduceSameSignature() {
         given(environmentService.getCurrentUsername()).willReturn("carol");
-        Clock c = fixedClock("2026-05-15T12:34:56Z");
 
-        SignatureResolver resolver = new SignatureResolver(environmentService, properties, c);
-
-        String first = resolver.resolve(new Object[]{"x", 1});
-        String second = resolver.resolve(new Object[]{"x", 1});
+        String first = resolver().resolve(PAY, new Object[]{"x", 1}).signature();
+        String second = resolver().resolve(PAY, new Object[]{"x", 1}).signature();
         assertThat(first).isEqualTo(second);
     }
 
     @Test
-    void blankHeaderFallsBackToTimeBucket() {
+    @Tag("issue-67")
+    @Tag("TC-67-03")
+    void blankHeaderFallsBackToContentSignature() {
         given(environmentService.getCurrentUsername()).willReturn("dave");
         setRequestWithHeader("Idempotency-Key", "   ");
 
-        Clock c = fixedClock("2026-05-15T00:00:42Z");
-        SignatureResolver resolver = new SignatureResolver(environmentService, properties, c);
+        SignatureResolver.Resolution r = resolver().resolve(PAY, new Object[]{"args"});
 
-        String sig = resolver.resolve(new Object[]{"args"});
+        assertThat(r.keyed()).isFalse();
+        assertThat(r.signature()).isEqualTo(sha256Hex(
+                "c:" + SignatureResolver.methodKey(PAY) + "|dave|" + CanonicalJson.stringify(new Object[]{"args"})));
+    }
 
-        long bucket = Instant.parse("2026-05-15T00:00:42Z").getEpochSecond();
-        String expected = sha256Hex("t:" + bucket + "|dave|" + CanonicalJson.stringify(new Object[]{"args"}));
-        assertThat(sig).isEqualTo(expected);
+    /**
+     * starter#67: {@code requestDatetime}/{@code traceId} were stripped from POJOs only, never
+     * from the {@code Map<String, Object> input} every Rama mutation takes. Configured names
+     * ride along.
+     */
+    @Test
+    @Tag("issue-67")
+    @Tag("TC-67-04")
+    void fallbackPath_mapInputDifferingOnlyByVolatileKeys_producesSameSignature() {
+        given(environmentService.getCurrentUsername()).willReturn("erin");
+        properties.setVolatileFields(Set.of("clientStamp"));
+
+        Map<String, Object> first = new LinkedHashMap<>();
+        first.put("name", "x");
+        first.put("requestDatetime", "2026-11-10T10:00:00Z");
+        first.put("traceId", "t-1");
+        first.put("clientStamp", 1);
+        Map<String, Object> second = new LinkedHashMap<>();
+        second.put("name", "x");
+        second.put("requestDatetime", "2026-11-10T10:00:03Z");
+        second.put("traceId", "t-2");
+        second.put("clientStamp", 2);
+
+        assertThat(resolver().resolve(PAY, new Object[]{first}).signature())
+                .isEqualTo(resolver().resolve(PAY, new Object[]{second}).signature());
     }
 
     @Test
-    void timeBucketBoundary_secondAdvance_changesSignature() {
-        given(environmentService.getCurrentUsername()).willReturn("eve");
-
-        SignatureResolver atTPoint999 = new SignatureResolver(
-                environmentService, properties, fixedClock("2026-05-15T00:00:00.999Z"));
-        SignatureResolver atTPlus1Point000 = new SignatureResolver(
-                environmentService, properties, fixedClock("2026-05-15T00:00:01.000Z"));
-
-        Object[] args = {"same", "args"};
-        String first = atTPoint999.resolve(args);
-        String second = atTPlus1Point000.resolve(args);
-
-        assertThat(first).isNotEqualTo(second);
-    }
-
-    @Test
-    void withinSameSecond_signaturesCollapse() {
-        given(environmentService.getCurrentUsername()).willReturn("frank");
-
-        SignatureResolver atTPoint100 = new SignatureResolver(
-                environmentService, properties, fixedClock("2026-05-15T00:00:00.100Z"));
-        SignatureResolver atTPoint900 = new SignatureResolver(
-                environmentService, properties, fixedClock("2026-05-15T00:00:00.900Z"));
-
-        Object[] args = {"same"};
-        assertThat(atTPoint100.resolve(args)).isEqualTo(atTPoint900.resolve(args));
+    @Tag("issue-67")
+    @Tag("TC-67-05")
+    void methodKey_namesDeclaringClassMethodAndParameterTypes() {
+        assertThat(SignatureResolver.methodKey(PAY))
+                .isEqualTo(Target.class.getName() + "#pay(long,java.lang.String)");
     }
 
     @Test
@@ -124,11 +145,12 @@ class SignatureResolverTest {
         given(environmentService.getCurrentUsername()).willReturn(null);
         setRequestWithHeader("Idempotency-Key", "key1");
 
-        SignatureResolver resolver = new SignatureResolver(
-                environmentService, properties, fixedClock("2026-05-15T00:00:00Z"));
-
-        String sig = resolver.resolve(new Object[]{});
+        String sig = resolver().resolve(PAY, new Object[]{}).signature();
         assertThat(sig).isEqualTo(sha256Hex("h:key1|"));
+    }
+
+    private SignatureResolver resolver() {
+        return new SignatureResolver(environmentService, properties);
     }
 
     private static void setRequestWithHeader(String name, String value) {
@@ -137,8 +159,17 @@ class SignatureResolverTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(req));
     }
 
-    private static Clock fixedClock(String iso) {
-        return Clock.fixed(Instant.parse(iso), ZoneOffset.UTC);
+    private static Method method(String name) {
+        try {
+            return Target.class.getMethod(name, long.class, String.class);
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    public static class Target {
+        public String pay(long amount, String invoiceId) { return "paid"; }
+        public String refund(long amount, String invoiceId) { return "refunded"; }
     }
 
     private static String sha256Hex(String input) {

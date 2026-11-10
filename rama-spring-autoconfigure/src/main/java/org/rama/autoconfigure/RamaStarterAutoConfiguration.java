@@ -442,9 +442,8 @@ public class RamaStarterAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         SignatureResolver signatureResolver(EnvironmentService environmentService,
-                                            IdempotencyProperties properties,
-                                            @org.springframework.beans.factory.annotation.Qualifier("idempotencyClock") Clock clock) {
-            return new SignatureResolver(environmentService, properties, clock);
+                                            IdempotencyProperties properties) {
+            return new SignatureResolver(environmentService, properties);
         }
 
         @Bean
@@ -458,8 +457,9 @@ public class RamaStarterAutoConfiguration {
         IdempotencyService idempotencyService(ObjectProvider<SystemRequestDedupRepository> repositoryProvider,
                                               EntityManager entityManager,
                                               ResponseCodec responseCodec,
-                                              org.springframework.transaction.PlatformTransactionManager transactionManager) {
-            return new IdempotencyService(repositoryProvider.getIfAvailable(), entityManager, responseCodec, transactionManager);
+                                              org.springframework.transaction.PlatformTransactionManager transactionManager,
+                                              @org.springframework.beans.factory.annotation.Qualifier("idempotencyClock") Clock clock) {
+            return new IdempotencyService(repositoryProvider.getIfAvailable(), entityManager, responseCodec, transactionManager, clock);
         }
 
         @Bean

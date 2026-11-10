@@ -14,6 +14,7 @@ import org.rama.service.idempotency.SignatureResolver;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.core.Ordered;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.time.Clock;
 import java.time.Duration;
@@ -51,23 +52,32 @@ public class IdempotencyAspect implements Ordered {
         }
 
         MethodSignature sig = (MethodSignature) pjp.getSignature();
-        Type returnType = sig.getMethod().getGenericReturnType();
+        Method method = sig.getMethod();
+        Type returnType = method.getGenericReturnType();
 
-        String signature = signatureResolver.resolve(pjp.getArgs());
+        SignatureResolver.Resolution resolution = signatureResolver.resolve(method, pjp.getArgs());
+        Duration window = resolution.keyed()
+                ? parseDuration(idempotent.ttl(), properties.getDefaultTtl())
+                : parseDuration(idempotent.fallbackWindow(), properties.getFallbackWindow());
+        if (!resolution.keyed() && (window.isZero() || window.isNegative())) {
+            // fallbackWindow = "0s": identical header-less calls are meant to run. See starter#67.
+            return pjp.proceed();
+        }
+
+        String signature = resolution.signature();
         OffsetDateTime now = OffsetDateTime.now(clock);
-        Duration ttl = parseTtl(idempotent.ttl());
-        OffsetDateTime expiresAt = now.plus(ttl);
         String methodName = sig.toLongString();
         String username = environmentService.getCurrentUsername();
 
-        boolean claimed = idempotencyService.tryClaim(signature, methodName, username, now, expiresAt);
+        boolean claimed = idempotencyService.tryClaim(signature, methodName, username, now, now.plus(window));
         if (log.isDebugEnabled()) {
-            log.debug("idempotency claim signature={} method={} claimed={}", signature, methodName, claimed);
+            log.debug("idempotency claim signature={} method={} keyed={} claimed={}",
+                    signature, methodName, resolution.keyed(), claimed);
         }
 
         Throwable[] thrownByWork = new Throwable[1];
         try {
-            return idempotencyService.lockAndExecute(signature, returnType, now, expiresAt, () -> {
+            return idempotencyService.lockAndExecute(signature, returnType, now, window, () -> {
                 try {
                     return pjp.proceed();
                 } catch (Throwable t) {
@@ -88,8 +98,8 @@ public class IdempotencyAspect implements Ordered {
         return properties.getAspectOrder();
     }
 
-    private Duration parseTtl(String spec) {
-        if (spec == null || spec.isBlank()) return properties.getDefaultTtl();
+    private static Duration parseDuration(String spec, Duration fallback) {
+        if (spec == null || spec.isBlank()) return fallback;
         return DurationStyle.detectAndParse(spec);
     }
 
