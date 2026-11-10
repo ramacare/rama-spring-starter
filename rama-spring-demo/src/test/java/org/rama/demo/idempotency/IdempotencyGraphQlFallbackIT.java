@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * created a second book.
  */
 @Tag("integration")
+@Tag("issue-67")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureHttpGraphQlTester
 @Import(IdempotencyGraphQlFallbackIT.ClockOverride.class)
@@ -51,6 +52,7 @@ class IdempotencyGraphQlFallbackIT {
     }
 
     @Test
+    @Tag("TC-67-21")
     void sameCreateBookTwoSecondsApart_withoutHeader_createsOneBook() {
         String title = "Idempotent " + UUID.randomUUID();
 
@@ -63,6 +65,7 @@ class IdempotencyGraphQlFallbackIT {
     }
 
     @Test
+    @Tag("TC-67-22")
     void sameCreateBookAfterTheWindow_createsASecondBook() {
         String title = "Repeated " + UUID.randomUUID();
 

@@ -85,6 +85,8 @@ class CanonicalJsonTest {
      * reached the hash and every request signed differently.
      */
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-06")
     void hardcodedVolatileNamesAreStrippedFromMapInput() {
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("name", "x");
@@ -95,6 +97,8 @@ class CanonicalJsonTest {
     }
 
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-07")
     void volatileNamesAreStrippedAtAnyDepth() {
         VolatileBean bean = new VolatileBean();
         bean.amount = 5;
@@ -112,6 +116,8 @@ class CanonicalJsonTest {
     }
 
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-08")
     void extraVolatileNamesAreStrippedFromMapsAndPojos() {
         Bean bean = new Bean();
         bean.name = "kept";
@@ -126,6 +132,8 @@ class CanonicalJsonTest {
     }
 
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-09")
     void nullAndScalarRootsStillStringify() {
         assertThat(CanonicalJson.stringify(null)).isEqualTo("null");
         assertThat(CanonicalJson.stringify(new Object[]{})).isEqualTo("[]");

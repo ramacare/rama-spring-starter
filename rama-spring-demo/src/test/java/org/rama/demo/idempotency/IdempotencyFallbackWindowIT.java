@@ -39,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 200 ms step in these tests would have produced a fresh signature.
  */
 @Tag("integration")
+@Tag("issue-67")
 @SpringBootTest(properties = {
         "rama.idempotency.fallback-window=4s",
         "rama.idempotency.volatile-fields=clientStamp"})
@@ -68,6 +69,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-11")
     void identicalCallAcrossASecondBoundary_replays() {
         String first = mutations.create("boundary");
         clock.advance(Duration.ofMillis(200));
@@ -78,6 +80,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-12")
     void identicalCallTwoSecondsLater_replays() {
         String first = mutations.create("retry");
         clock.advance(Duration.ofSeconds(2));
@@ -89,6 +92,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-13")
     void identicalCallAfterTheWindow_runsAgain() {
         String first = mutations.create("later");
         clock.advance(Duration.ofSeconds(5));
@@ -99,6 +103,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-14")
     void windowIsCountedFromCompletion_soASlowCallStillReplays() {
         mutations.slowCreate("slow");          // the work itself takes 10 s of clock time
         clock.advance(Duration.ofSeconds(2));  // the duplicate lands 2 s after it finished
@@ -110,6 +115,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-15")
     void differentMethodsWithEqualArgs_bothRun() {
         String created = mutations.create("same");
         String archived = mutations.archive("same");
@@ -120,6 +126,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-16")
     void mapInputDifferingOnlyByVolatileKeys_replays() {
         String first = mutations.createFromInput(input("2026-05-15T00:00:00Z", "trace-1", 1));
         clock.advance(Duration.ofSeconds(1));
@@ -130,6 +137,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-17")
     void fallbackWindowProperty_setsTheRowExpiry() {
         mutations.create("expiry");
 
@@ -137,6 +145,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-18")
     void annotationFallbackWindow_overridesTheProperty() {
         mutations.shortWindow("short");
 
@@ -144,6 +153,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-19")
     void zeroFallbackWindow_optsTheMethodOutOfHeaderlessDedup() {
         mutations.optedOut("toggle");
         mutations.optedOut("toggle");
@@ -153,6 +163,7 @@ class IdempotencyFallbackWindowIT {
     }
 
     @Test
+    @Tag("TC-67-20")
     void keyedCall_usesTtl_andIgnoresTheFallbackWindow() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Idempotency-Key", "client-key-1");

@@ -57,6 +57,8 @@ class SignatureResolverTest {
      * {@code expires_at} instead.
      */
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-01")
     void fallbackPath_hashesMethodUsernameAndArgs_withNoTimeComponent() {
         given(environmentService.getCurrentUsername()).willReturn("bob");
         Object[] args = {42, "make-payment"};
@@ -70,6 +72,8 @@ class SignatureResolverTest {
 
     /** starter#67: the method was stored on the row but never hashed, so equal args collided across mutations. */
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-02")
     void fallbackPath_differentMethodsWithEqualArgs_produceDifferentSignatures() {
         given(environmentService.getCurrentUsername()).willReturn("carol");
         Object[] args = {42L, "INV-1"};
@@ -88,6 +92,8 @@ class SignatureResolverTest {
     }
 
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-03")
     void blankHeaderFallsBackToContentSignature() {
         given(environmentService.getCurrentUsername()).willReturn("dave");
         setRequestWithHeader("Idempotency-Key", "   ");
@@ -105,6 +111,8 @@ class SignatureResolverTest {
      * ride along.
      */
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-04")
     void fallbackPath_mapInputDifferingOnlyByVolatileKeys_producesSameSignature() {
         given(environmentService.getCurrentUsername()).willReturn("erin");
         properties.setVolatileFields(Set.of("clientStamp"));
@@ -125,6 +133,8 @@ class SignatureResolverTest {
     }
 
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-05")
     void methodKey_namesDeclaringClassMethodAndParameterTypes() {
         assertThat(SignatureResolver.methodKey(PAY))
                 .isEqualTo(Target.class.getName() + "#pay(long,java.lang.String)");

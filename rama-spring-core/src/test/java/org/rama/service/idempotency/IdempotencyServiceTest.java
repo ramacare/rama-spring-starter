@@ -58,6 +58,8 @@ class IdempotencyServiceTest {
      * from completion.
      */
     @Test
+    @Tag("issue-67")
+    @Tag("TC-67-10")
     void lockAndExecute_countsExpiryFromCompletion_notFromStart() throws Throwable {
         OffsetDateTime now = OffsetDateTime.ofInstant(T0, ZoneOffset.UTC);
         SystemRequestDedup row = new SystemRequestDedup();
