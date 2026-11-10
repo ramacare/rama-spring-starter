@@ -60,9 +60,10 @@ class IdempotencyCrashRecoveryIT {
     }
 
     @Test
-    void pendingRowFromCrashedThread_picksUpAndCompletes() {
+    void pendingRowFromCrashedThread_picksUpAndCompletes() throws Exception {
         Object[] args = {123L};
-        String signature = signatureResolver.resolve(args);
+        String signature = signatureResolver.resolve(
+                TestMutation.class.getMethod("makePayment", long.class), args).signature();
 
         OffsetDateTime now = OffsetDateTime.parse("2026-05-15T00:00:00Z");
         SystemRequestDedup stranded = new SystemRequestDedup();

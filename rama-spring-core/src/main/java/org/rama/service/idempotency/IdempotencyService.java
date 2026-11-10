@@ -13,6 +13,8 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.lang.reflect.Type;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 
 @Slf4j
@@ -38,17 +40,20 @@ public class IdempotencyService {
     private final ResponseCodec responseCodec;
     private final TransactionTemplate claimTransactionTemplate;
     private final TransactionTemplate lockTransactionTemplate;
+    private final Clock clock;
 
     public IdempotencyService(@Nullable SystemRequestDedupRepository repository,
                               EntityManager entityManager,
                               ResponseCodec responseCodec,
-                              PlatformTransactionManager transactionManager) {
+                              PlatformTransactionManager transactionManager,
+                              Clock clock) {
         if (repository == null) {
             log.warn(UNAVAILABLE_MESSAGE);
         }
         this.repository = repository;
         this.entityManager = entityManager;
         this.responseCodec = responseCodec;
+        this.clock = clock;
         this.claimTransactionTemplate = new TransactionTemplate(transactionManager);
         this.claimTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.lockTransactionTemplate = new TransactionTemplate(transactionManager);
@@ -104,13 +109,19 @@ public class IdempotencyService {
      *     write is durable, so concurrent callers either see COMPLETED or
      *     block until we commit.
      *
+     * {@code now} is when this caller arrived; {@code window} is how long the
+     * response is replayed, counted from when the work <em>finishes</em>. Counting it
+     * from the start left a call that outran its window committing a row that had
+     * already expired, so the duplicate blocked on the lock ran the work again.
+     * See starter#67.
+     *
      * Uses programmatic transaction control for the same reason as
      * {@link #tryClaim} — and to avoid any class-level proxy interaction
      * that would otherwise propagate the inner persist's rollback-only
      * mark onto the outer call.
      */
     public Object lockAndExecute(String signature, Type returnType,
-                                 OffsetDateTime now, OffsetDateTime expiresAt,
+                                 OffsetDateTime now, Duration window,
                                  ThrowingSupplier<Object> work) throws Throwable {
         requireRepository();
         Throwable[] thrown = new Throwable[1];
@@ -136,7 +147,7 @@ public class IdempotencyService {
                 }
                 row.setStatus(Status.COMPLETED);
                 row.setResponseJson(encodeOrDrop(signature, row.getMethod(), result));
-                row.setExpiresAt(expiresAt);
+                row.setExpiresAt(OffsetDateTime.now(clock).plus(window));
                 repository.save(row);
                 return result;
             });
