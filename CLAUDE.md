@@ -15,6 +15,7 @@ mvn -DskipTests verify         # Verify without tests
 ```bash
 mvn test                       # Run all tests
 mvn test -pl rama-spring-core  # Run tests for core module only
+mvn -pl rama-spring-demo -am verify -Dgroups=issue-67   # Run one GitLab issue's tests (see Tests)
 ```
 
 ### Publishing
@@ -142,4 +143,44 @@ Jackson mappers are framed in the JVM default time zone, not Jackson's built-in 
 - Use `@EntityEvent` annotation on entities to auto-publish `EntityCreated` / `EntityUpdated` events via `EntityEventService`
 - API key authentication via `ApiKeyAuthFilter` — keys stored in `api_key` table, validated by `ApiKeyService`
 - Liquibase migrations in `rama-spring-autoconfigure/src/main/resources/db/changelog/`
-- Tests use JUnit 5 with `@Tag("unit")` or `@Tag("integration")`
+- Tests use JUnit 5 with `@Tag("unit")` or `@Tag("integration")` — see [Tests](#tests)
+
+### Tests
+
+Tests are split into two types by JUnit 5 tag, and the type decides the module and the file name:
+
+- **Unit — `@Tag("unit")`**: `rama-spring-core/src/test/java/org/rama/` (plus a few in
+  `rama-spring-demo/src/test/java/` that need no context), named `*Test.java`, run by Surefire in
+  `mvn test`. Use for one class in isolation, with no Spring context or database; mock its
+  dependencies with Mockito (`@ExtendWith(MockitoExtension.class)`).
+- **Integration — `@Tag("integration")`**: `rama-spring-demo/src/test/java/` (`org.rama.demo.*`, and
+  `com.example.consumer` for a consumer-shaped application root), named `*IT.java`, run by Failsafe in
+  `mvn verify`. A full `@SpringBootTest` against H2, or another engine with
+  `-Dspring.profiles.active=<engine>`. Use for anything that needs the auto-configuration, JPA and
+  transactions, an AOP proxy, or the GraphQL endpoint.
+
+Tests written for a GitLab issue also carry `@Tag("issue-<number>")`, e.g. `@Tag("issue-67")` — on each
+test method, or on the class when the whole class is for that issue — so the issue's tests can be run
+and reported with `-Dgroups=issue-67`.
+
+Every test method added for an issue also gets its own Test case ID tag, `@Tag("TC-<issue>-<nn>")`
+(e.g. `@Tag("TC-67-01")`), auto-incremented from 01 per issue across unit and integration tests together
+— one sequence across `rama-spring-core` and `rama-spring-demo` — never reused or renumbered. It always
+goes on the method, even when `issue-<number>` is on the class. The ID is used to match the test to the
+issue's test report.
+
+- The number is this repository's issue (`ramacare/backend/rama-spring-starter`, the `#N` in commit
+  titles and in references like starter#64), never a consumer's. A starter test written because of a
+  consumer's issue takes the starter issue that tracks the fix.
+- Tag only tests added for the issue. An existing test that is merely adapted to a changed API keeps
+  the tags it had; a test whose assertion is rewritten for the issue's new behaviour gets tagged.
+- A backport carries the tags unchanged, so one `TC-<issue>-<nn>` identifies the same test on `main`,
+  `release/4.4.x` and `release/4.3.x`.
+
+`-Dgroups` reaches Surefire and Failsafe alike, so one command runs an issue's unit and integration
+tests together; a module with no matching test is skipped, not failed:
+
+```bash
+mvn -pl rama-spring-demo -am verify -Dgroups=issue-67        # every test for #67
+mvn -pl rama-spring-demo -am verify -Dgroups=TC-67-21        # one test case
+```

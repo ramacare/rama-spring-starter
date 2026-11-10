@@ -1,6 +1,8 @@
 package org.rama.entity;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.rama.util.EncryptionUtil;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
@@ -33,6 +35,12 @@ class JsonConverterTimeZoneTest {
 
     public static class Holder {
         public OffsetDateTime recordedAt;
+    }
+
+    /** The key is static, so leaving it set would change how later test classes behave in this JVM. */
+    @AfterEach
+    void clearEncryptionKey() {
+        EncryptionUtil.setKey(null);
     }
 
     @Test
@@ -125,7 +133,7 @@ class JsonConverterTimeZoneTest {
      */
     @Test
     void jsonEncryptConverter_usesTheSameFrameAsJsonConverter() {
-        org.rama.util.EncryptionUtil.setKey("0123456789abcdef0123456789abcdef");
+        EncryptionUtil.setKey("0123456789abcdef0123456789abcdef");
         JsonEncryptConverter converter = new JsonEncryptConverter();
         OffsetDateTime original = OffsetDateTime.now();
         Map<String, Object> payload = new LinkedHashMap<>();

@@ -1,5 +1,6 @@
 package org.rama.entity;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.rama.util.EncryptionUtil;
@@ -16,6 +17,12 @@ class JsonEncryptConverterTest {
         // 16/24/32-byte key for AES; deterministic across runs so encrypt/decrypt
         // round-trip is reproducible in tests.
         EncryptionUtil.setKey("0123456789abcdef0123456789abcdef");
+    }
+
+    /** The key is static, so leaving it set would change how later test classes behave in this JVM. */
+    @AfterAll
+    static void clearKey() {
+        EncryptionUtil.setKey(null);
     }
 
     private final JsonEncryptConverter converter = new JsonEncryptConverter();

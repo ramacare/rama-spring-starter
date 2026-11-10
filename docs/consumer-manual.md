@@ -137,6 +137,35 @@ What changes for you:
   it firing for duplicates, give your aspect an `@Order` lower than `rama.idempotency.aspect-order`.
 - Without `encrypt.key` the body stays plaintext, with one WARN at first use.
 
+### Upgrading past 4.3.7 — header-less calls are deduplicated for a real window
+
+A call to an `@IdempotentMutation` that carries no `Idempotency-Key` header — the usual case for
+a frontend that cannot set one — is matched by its content. That match was keyed to the current
+wall-clock **second**, so it caught only duplicates landing in the same second: a double-submit
+straddling a second boundary, a re-click after a slow response, or a client retry a few seconds
+later all ran again. `ttl` never applied to it. Two more defects sat in the same signature: the
+method was not part of it, so two mutations called with equal arguments could share a row, and
+`requestDatetime` / `traceId` were stripped from POJO inputs only, never from the
+`@Argument Map<String, Object> input` Rama mutations take. All three are fixed (starter#67).
+
+What changes for you:
+
+- **Identical header-less calls within `rama.idempotency.fallback-window` (default `5s`) replay
+  the first call's response** instead of running again. The window is counted from when the
+  first call *finished*, so a duplicate that arrives while it is still running always replays.
+  Callers that send the header are still governed by `ttl`, which is now likewise counted from
+  completion rather than from the start of the call.
+- **A deliberate identical repeat inside the window replays too** — for example a toggle sent
+  A → B → A within 5 s: the third call returns the first call's response and does not run. Put
+  `@IdempotentMutation(fallbackWindow = "0s")` on such a method to opt it out of header-less
+  deduplication, or shorten the window globally.
+- **Per-request values in the payload defeat the match.** `requestDatetime` and `traceId` are now
+  ignored at any depth, maps included. List any others your client sends (a client timestamp, a
+  random correlation id) in `rama.idempotency.volatile-fields`.
+- `SignatureResolver.resolve` now takes the `Method` and returns a `Resolution`
+  (`signature`, `keyed`), and `IdempotencyService` takes the `idempotencyClock`. This only
+  matters if you replaced one of those beans or called them directly.
+
 ## 1. Add the Dependency
 
 ```xml
@@ -249,7 +278,9 @@ rama:
   idempotency:
     enabled: true                    # @IdempotentMutation aspect (see Quartz + JPA section)
     header-name: Idempotency-Key
-    default-ttl: 30s                 # TTL for any @IdempotentMutation that sets no ttl of its own
+    default-ttl: 30s                 # Replay window for calls WITH the header, when the method sets no ttl
+    fallback-window: 5s              # Replay window for calls WITHOUT the header (matched by method + user + args); 0s = off
+    volatile-fields: []              # Extra payload keys ignored when matching header-less calls (requestDatetime, traceId always are)
     cleanup-interval: 5m             # How often the Quartz job evicts expired rows
     aspect-order: 1000               # Inside Spring Security (100–600), outside @Transactional + unordered aspects
     cors:
