@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -43,8 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>the cached body was stored in plaintext, column-encrypted fields included.</li>
  * </ul>
  *
- * The clock is fixed so the no-header signature (same args within the same second)
- * is deterministic.
+ * The clock is fixed so every replay lands inside the no-header dedup window.
  */
 @Tag("integration")
 @SpringBootTest
@@ -80,7 +80,7 @@ class IdempotencyResponseCodecIT {
         assertThat(replay.getReviewer()).isEqualTo(first.getReviewer());
         assertThat(replay.getBook()).as("an uninitialized proxy is cached as null").isNull();
         assertThat(Mutations.invocations).hasValue(1);
-        assertThat(row(key).getStatus()).isEqualTo(SystemRequestDedup.Status.COMPLETED);
+        assertThat(row("reviewOfMissingBook", key).getStatus()).isEqualTo(SystemRequestDedup.Status.COMPLETED);
     }
 
     @Test
@@ -92,7 +92,7 @@ class IdempotencyResponseCodecIT {
 
         assertThat(replay.getId()).isEqualTo(first.getId());
         assertThat(replay.getBook()).isNull();
-        assertThat(cachedJson(reviewId)).doesNotContain("Unloaded relation");
+        assertThat(cachedJson("loadReview", reviewId)).doesNotContain("Unloaded relation");
         assertThat(Mutations.invocations).hasValue(1);
     }
 
@@ -102,10 +102,10 @@ class IdempotencyResponseCodecIT {
 
         mutations.loadReview(reviewId);
 
-        String stored = row(reviewId).getResponseJson();
+        String stored = row("loadReview", reviewId).getResponseJson();
         assertThat(EncryptionUtil.isConfigured()).isTrue();
         assertThat(stored).doesNotContain("reviewer-");
-        assertThat(cachedJson(reviewId)).contains("reviewer-");
+        assertThat(cachedJson("loadReview", reviewId)).contains("reviewer-");
     }
 
     @Test
@@ -120,7 +120,7 @@ class IdempotencyResponseCodecIT {
         assertThat(bookRepository.count()).as("the work committed despite the cache failure").isEqualTo(booksBefore + 1);
         assertThat(replay).as("replay carries no body, but is not a second run").isEmpty();
         assertThat(Mutations.invocations).hasValue(1);
-        assertThat(row(key).getStatus()).isEqualTo(SystemRequestDedup.Status.COMPLETED);
+        assertThat(row("saveBookReturningUnencodable", key).getStatus()).isEqualTo(SystemRequestDedup.Status.COMPLETED);
     }
 
     private String persistBookWithReview(String title) {
@@ -134,12 +134,17 @@ class IdempotencyResponseCodecIT {
         });
     }
 
-    private SystemRequestDedup row(String arg) {
-        return dedupRepository.findById(signatureResolver.resolve(new Object[]{arg})).orElseThrow();
+    private SystemRequestDedup row(String method, String arg) {
+        try {
+            Method m = Mutations.class.getMethod(method, String.class);
+            return dedupRepository.findById(signatureResolver.resolve(m, new Object[]{arg}).signature()).orElseThrow();
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError(e);
+        }
     }
 
-    private String cachedJson(String arg) {
-        return EncryptionUtil.decrypt(row(arg).getResponseJson());
+    private String cachedJson(String method, String arg) {
+        return EncryptionUtil.decrypt(row(method, arg).getResponseJson());
     }
 
     /** A response Jackson cannot write: its only property throws. */
